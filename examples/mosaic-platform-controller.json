@@ -73,12 +73,12 @@
 	"definitions" : {
 		"package:name" : "mosaic-platform-controller",
 		"package:name-qualified" : "@{definitions:package:name}-@{definitions:distribution:identifier}",
-		"package:version" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:flavour}",
+		"package:version" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
 		"package:release" : "@{execution:timestamp}",
 		"distribution:version" : "0.7.0",
 		"distribution:release" : "5",
-		"distribution:flavour" : "mosaic",
-		"distribution:identifier" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:flavour}",
+		"distribution:label" : "mosaic",
+		"distribution:identifier" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
 		"resources:url:base" : "http://data.volution.ro/ciprian/public/mosaic/packages",
 		"resources:url:suffix" : "@{definitions:distribution:identifier}"
 	}

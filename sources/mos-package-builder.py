@@ -24,55 +24,66 @@ def _main (_configuration) :
 	_package_distribution = _configuration["package-distribution"]
 	
 	if _temporary is None :
-		_temporary = path.join (path.join ("/tmp/mosaic-mos-package-builder/temporary", uuid.uuid4 () .hex))
+		_logger.info ("unspecified temporary; using a random one!")
+		_temporary = path.realpath (path.join (path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/temporary", uuid.uuid4 () .hex)))
 		MkdirCommand () .execute (_temporary, True)
-	if True :
-		_sources_scratch = path.join (_temporary, "sources")
-		_package_scratch = path.join (_temporary, "package")
+	
+	_sources_scratch = path.realpath (path.join (_temporary, "sources"))
+	_package_scratch = path.realpath (path.join (_temporary, "package"))
+	
 	if _descriptor is None :
+		_logger.info ("unspecified descriptor; using `package.json`!")
 		_descriptor = path.join (_sources_scratch, "package.json")
+	_descriptor = path.realpath (_descriptor)
 	
-	if True :
-		_descriptor = path.realpath (_descriptor)
+	if _sources_archive is None :
+		_logger.info ("unspecified sources archive; ignoring!")
+	else :
 		_sources_archive = path.realpath (_sources_archive)
-		_sources_scratch = path.realpath (_sources_scratch)
-		_package_archive = path.realpath (_package_archive)
-		_package_scratch = path.realpath (_package_scratch)
-		_temporary = path.realpath (_temporary)
 	
-	_logger.info ("configuring...")
+	if _package_archive is None :
+		_logger.info ("unspecified package archive; using `package.rpm`!")
+		_package_archive = path.realpath (path.join (_temporary, "package.rpm"))
+	else :
+		_package_archive = path.realpath (_package_archive)
+	
+	_logger.info ("arguments:")
 	_logger.info ("  -> descriptor: `%s`;", _descriptor)
 	_logger.info ("  -> sources archive: `%s`;", _sources_archive)
 	_logger.info ("  -> sources scratch: `%s`;", _sources_scratch)
 	_logger.info ("  -> package archive: `%s`;", _package_archive)
 	_logger.info ("  -> package scratch: `%s`;", _package_scratch)
 	_logger.info ("  -> temporary: `%s`;", _temporary)
-	_logger.info ("  -> package name : `%s`;", _package_name)
-	_logger.info ("  -> package version : `%s`;", _package_version)
-	_logger.info ("  -> package release : `%s`;", _package_release)
-	_logger.info ("  -> package distribution : `%s`;", _package_distribution)
+	_logger.info ("  -> package name: `%s`;", _package_name)
+	_logger.info ("  -> package version: `%s`;", _package_version)
+	_logger.info ("  -> package release: `%s`;", _package_release)
+	_logger.info ("  -> package distribution: `%s`;", _package_distribution)
 	
 	os.chdir (_temporary)
 	os.environ["TMPDIR"] = _temporary
 	
-	if os.path.exists (_sources_archive) :
-		SafeZipExtractCommand () .execute (_sources_scratch, _sources_archive)
-	else :
-		_logger.warn ("missing sources archive `%s`; ignoring!", _sources_archive)
+	if _sources_archive is not None :
+		if os.path.exists (_sources_archive) :
+			_logger.debug ("extracting sources archive...")
+			SafeZipExtractCommand () .execute (_sources_scratch, _sources_archive)
+		else :
+			_logger.warn ("missing sources archive; ignoring!")
 	
 	if os.path.exists (_package_archive) :
-		_logger.warn ("existing package archive `%s`; deleting!", _package_archive)
+		_logger.warn ("existing package archive; deleting!")
+		RmCommand () .execute (_package_archive)
 	
 	_definitions = {}
 	if _package_name is not None :
 		_definitions["package:name"] = _package_name
 	if _package_version is not None :
-		_definitions["package:version"] = _package_version
+		_definitions["distribution:version"] = _package_version
 	if _package_release is not None :
-		_definitions["package:release"] = _package_release
+		_definitions["distribution:release"] = _package_release
 	if _package_distribution is not None :
-		_definitions["package:distribution"] = _package_distribution
+		_definitions["distribution:label"] = _package_distribution
 	
+	_logger.info ("initializing builder...")
 	_builder = _create_builder (
 			descriptor = _json_load (_descriptor),
 			sources = _sources_scratch,
@@ -82,15 +93,21 @@ def _main (_configuration) :
 			definitions = _definitions,
 	)
 	
+	_logger.info ("generating commands...")
 	_prepare = _builder.instantiate ("prepare")
 	_assemble = _builder.instantiate ("assemble")
 	_package = _builder.instantiate ("package")
 	_cleanup = _builder.instantiate ("cleanup")
 	
-	if False :
+	if True :
 		_scroll = Scroll ()
 		
 		_builder.describe (_scroll)
+		
+		_scroll.stream (lambda _line : _logger.debug ("%s", _line))
+	
+	if False :
+		_scroll = Scroll ()
 		
 		_scroll.append ("prepare commands:")
 		_prepare.describe (_scroll.splice (indentation = 1))
@@ -115,10 +132,20 @@ def _main (_configuration) :
 		_scroll.stream (lambda _line : _logger.debug ("%s", _line))
 	
 	if os.environ.get ("__execute__") == "__true__" :
+		
+		_logger.info ("executing prepare commands...")
 		_prepare.execute ()
+		
+		_logger.info ("executing assemble commands...")
 		_assemble.execute ()
+		
+		_logger.info ("executing package commands...")
 		_package.execute ()
+		
+		_logger.info ("executing cleanup commands...")
 		_cleanup.execute ()
+		
+		_logger.info ("succeeded; package available at `%s`!", _package_archive)
 
 
 class Builder (object) :
@@ -266,7 +293,11 @@ class CompositePackageBuilder (Builder) :
 		
 		Builder.__init__ (self, temporary, definitions)
 		
-		self._sources = PathValue (self, [sources])
+		if sources is not None :
+			self._sources = PathValue (self, [sources])
+		else :
+			self._sources = None
+		
 		self._package_archive = PathValue (self, [package_archive])
 		self._package_outputs = PathValue (self, [package_outputs])
 		
@@ -409,7 +440,6 @@ class CompositePackageBuilder (Builder) :
 				rpm_defines = {
 						
 						"_topdir" : self.rpm_outputs,
-						# _rpmconfigdir
 						
 						"_specdir" : "%{_topdir}/SPECS",
 						"_sourcedir" : "%{_topdir}/SOURCES",
@@ -422,11 +452,12 @@ class CompositePackageBuilder (Builder) :
 						
 						"_rpmfilename" : "package.rpm",
 						
-						"__check_files" : _true_path,
 						"__find_provides" : _true_path,
 						"__find_requires" : _true_path,
 						"__find_conflicts" : _true_path,
 						"__find_obsoletes" : _true_path,
+						
+						"__check_files" : _true_path,
 						
 						"__spec_prep_cmd" : _true_path,
 						"__spec_build_cmd" : _true_path,
@@ -1521,14 +1552,30 @@ elif __name__ == "__main__" :
 	
 	if len (sys.argv) == 2 :
 		_workbench = sys.argv[1]
+		_sources = path.join (_workbench, "sources.zip")
+		_package = path.join (_workbench, "package.rpm")
+		_descriptor = None
+		
 	elif len (sys.argv) == 3 :
-		_workbench = sys.argv[1]
-		_configuration["descriptor"] = sys.argv[2]
+		if sys.argv[1].endswith (".json") :
+			_descriptor = sys.argv[1]
+			_sources = None
+		elif sys.argv[1].endswith (".zip") :
+			_sources = sys.argv[1]
+			_descriptor = None
+		else :
+			raise Exception ("wft!")
+		if sys.argv[2].endswith (".rpm") :
+			_package = sys.argv[2]
+		else :
+			raise Exception ("wtf!")
+		
 	else :
 		raise Exception ("wtf!")
 	
-	_configuration["sources"] = path.join (_workbench, "sources.zip")
-	_configuration["package"] = path.join (_workbench, "package.rpm")
+	_configuration["descriptor"] = _descriptor
+	_configuration["sources"] = _sources
+	_configuration["package"] = _package
 	
 	_main (_configuration)
 	

@@ -21,7 +21,7 @@ _configuration = {
 		
 		"package-name" : os.environ.get ("PackageName"),
 		"package-version" : os.environ.get ("PackageVersion"),
-		"package-release" : os.environ.get ("BUILD_NUMBER"),
+		"package-release" : os.environ.get ("PackageRelease"),
 		"package-distribution" : os.environ.get ("PackageDistribution"),
 }
 
