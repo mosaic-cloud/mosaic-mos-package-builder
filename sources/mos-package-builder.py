@@ -183,7 +183,7 @@ class Builder (object) :
 	
 	def _initialize_definition (self, _identifier, _template) :
 		if _identifier in self._definitions :
-			raise Exception ()
+			raise _error ("d6e8010c")
 		_definition = ExpandableStringValue (self._context, _template, identifier = "definitions:%s" % (_identifier,))
 		self._definitions[_identifier] = _definition
 	
@@ -195,7 +195,7 @@ class Builder (object) :
 	def _initialize_resource (self, _identifier, _descriptor) :
 		
 		if _identifier in self._resources :
-			raise Exception ("wtf!")
+			raise _error ("f5607669")
 		
 		_generator = _json_select (_descriptor, ("generator",), basestring)
 		
@@ -205,7 +205,7 @@ class Builder (object) :
 			_resource = FetcherResource (self, _identifier, _uri, _output)
 			
 		else :
-			raise Exception ("wtf!")
+			raise _error ("cf3a6b47")
 		
 		self._resources[_identifier] = _resource
 	
@@ -233,15 +233,15 @@ class Builder (object) :
 			_overlay = SymlinksOverlay (self, _root, _target, _links)
 			
 		else :
-			raise Exception ("wtf!")
+			raise _error ("93fe5c5d")
 		
 		self._overlays.append (_overlay)
 	
 	def instantiate (self, _phase) :
-		raise Exception ("wtf!")
+		raise _error ("300e7568")
 	
 	def describe (self, _scroll) :
-		raise Exception ("wtf!")
+		raise _error ("c947398f")
 	
 	def _describe_definitions (self, _scroll) :
 		_scroll.append ("definitions:")
@@ -269,7 +269,7 @@ class Builder (object) :
 	
 	def resolve_resource (self, _identifier) :
 		if _identifier not in self._resources :
-			raise Exception ("wtf! %s" % _identifier)
+			raise _error ("c929637c", identifier = _identifier)
 		return self._resources[_identifier]
 
 
@@ -282,7 +282,7 @@ def _create_builder (descriptor = None, **_arguments) :
 		_builder = CompositePackageBuilder (descriptor = descriptor, **_arguments)
 		
 	else :
-		raise Exception ("wtf!")
+		raise _error ("7882db14")
 	
 	return _builder
 
@@ -313,7 +313,7 @@ class CompositePackageBuilder (Builder) :
 		elif _phase == "cleanup" :
 			return self._instantiate_cleanup ()
 		else :
-			raise Exception ("wtf!")
+			raise _error ("c0072485")
 	
 	def _instantiate_prepare (self) :
 		_commands = []
@@ -606,10 +606,10 @@ class Overlay (object) :
 		self._command_arguments = _builder._command_arguments
 	
 	def instantiate (self) :
-		raise Exception ("wtf!")
+		raise _error ("1dc02360")
 	
 	def describe (self, _scroll) :
-		raise Exception ("wtf!")
+		raise _error ("fb80334a")
 
 
 class UnarchiverOverlay (Overlay) :
@@ -626,7 +626,7 @@ class UnarchiverOverlay (Overlay) :
 			_archive_format = "cpio"
 			_stream_format = "gzip"
 		else :
-			raise Exception ("wtf!")
+			raise _error ("bad3ec12")
 		
 		_commands = []
 		
@@ -640,7 +640,7 @@ class UnarchiverOverlay (Overlay) :
 			_stream = self._resource
 			
 		else :
-			raise Exception ("wtf!")
+			raise _error ("6534e0ed")
 		
 		_target = PathValue (None, [self._root, self._target])
 		
@@ -698,10 +698,10 @@ class Resource (object) :
 		self._command_arguments = _builder._command_arguments
 	
 	def instantiate (self) :
-		raise Exception ("wtf!")
+		raise _error ("e505577a")
 	
 	def describe (self, _scroll) :
-		raise Exception ("wtf!")
+		raise _error ("4b7ca4e7")
 
 
 class FetcherResource (Resource) :
@@ -730,15 +730,15 @@ class Context (object) :
 	
 	def register_value (self, _identifier, _value) :
 		if _context_value_identifier_re.match (_identifier) is None :
-			raise Exception ("wtf!")
+			raise _error ("e3f0d909")
 		if _identifier in self._resolvable_values :
-			raise Exception ("wtf!")
+			raise _error ("4a5a0274")
 		self._resolvable_values[_identifier] = _value
 		return _value
 	
 	def resolve_value (self, _identifier) :
 		if not _identifier in self._resolvable_values :
-			raise Exception ("wtf! %s" % _identifier)
+			raise _error ("a17bc76a", identifier = _identifier)
 		_value = self._resolvable_values[_identifier]
 		return _value
 
@@ -762,26 +762,26 @@ class ContextValue (object) :
 	
 	def __call__ (self) :
 		if self._resolved is None :
-			raise Exception ("wtf!")
+			raise _error ("6aaade75")
 		if not self._resolved :
 			self._resolved = None
 			_value = self._resolve ()
 			if self._constraints is not None :
 				for _constraint in self._constraints :
 					if not _constraint (_value) :
-						raise Exception ("wft! %s" % (_value,))
+						raise _error ("9dfbd8e7", value = _value)
 			self._value = _value
 			self._resolved = True
 		return self._value
 	
 	def _resolve (self) :
-		raise Exception ("wtf!")
+		raise _error ("c5ec1b69")
 	
 	def __str__ (self) :
 		return repr (self)
 	
 	def __repr__ (self) :
-		raise Exception ("wtf!")
+		raise _error ("557267b5")
 
 
 class ConstantValue (ContextValue) :
@@ -830,7 +830,7 @@ class ExpandableStringValue (ContextValue) :
 	def _resolve (self) :
 		_match = _expandable_string_template_re.match (self._template)
 		if _match is None :
-			raise Exception ("wtf!")
+			raise _error ("cee1f00b")
 		_value = re.sub (_expandable_string_template_variable_re, self._resolve_variable_value, self._template)
 		return _value
 	
@@ -969,7 +969,7 @@ class Command (object) :
 		return _instance.execute (**_map_arguments)
 	
 	def instantiate (self, *_list_arguments, **_map_arguments) :
-		raise Exception ("wtf!")
+		raise _error ("dcbf0297")
 
 
 class BasicCommand (Command) :
@@ -1175,7 +1175,7 @@ class SequentialCommandInstance (object) :
 	
 	def execute (self, wait = True) :
 		if not wait :
-			raise Exception ("wtf!")
+			raise _error ("0d2b6697")
 		for _command in self._commands :
 			_command.execute (wait = True)
 		if wait :
@@ -1230,7 +1230,7 @@ class ExternalCommandInstance (object) :
 	def execute (self, wait = True) :
 		
 		if self._process is not None :
-			raise Exception ()
+			raise _error ("42421ef4")
 		
 		_executable = _coerce (self._executable, basestring)
 		_argument0 = _coerce (self._argument0, basestring)
@@ -1287,7 +1287,7 @@ class ExternalCommandInstance (object) :
 		_outcome = self._process.wait ()
 		
 		if _outcome != 0 :
-			raise Exception (_outcome)
+			raise _error ("39199a54", outcome = _outcome)
 	
 	def describe (self, _scroll) :
 		_scroll.append ("external command:")
@@ -1396,10 +1396,10 @@ class Scroll (object) :
 					if isinstance (_line, basestring) or isinstance (_line, tuple) :
 						yield _line, _indentation
 					else :
-						raise Exception ("wtf!")
+						raise _error ("6d472c53")
 				
 			else :
-				raise Exception ("wtf!")
+				raise _error ("9b817186")
 	
 	def _format (self, _line, _indentation) :
 		
@@ -1412,7 +1412,7 @@ class Scroll (object) :
 			_line = _format % _parts
 			
 		else :
-			raise Exception ("wtf!")
+			raise _error ("22469e17")
 		
 		_line = ("\t" * _indentation) + _line
 		
@@ -1433,7 +1433,7 @@ def _mkdirs (_path) :
 	if path.isdir (_path) :
 		return
 	if path.exists (_path) :
-		raise Exception ("wtf!")
+		raise _error ("8790dabf")
 	_logger.debug ("creating folder `%s`...", _path)
 	os.makedirs (_path)
 
@@ -1447,23 +1447,23 @@ def _json_select (_root, _keys, _type, required = True, default = None) :
 	for _key in _keys :
 		if isinstance (_key, basestring) :
 			if not isinstance (_root, dict) :
-				raise Exception ("wtf!")
+				raise _error ("ffb8eb08")
 			elif _key in _root :
 				_root = _root[_key]
 			elif required :
-				raise Exception ("wtf!")
+				raise _error ("a56daa10")
 			else :
 				_root = default
 				break
 		elif isinstance (_key, int) :
 			if not isinstance (_root, list) :
-				raise Exception ("wft!")
+				raise _error ("d742b4cf")
 			else :
 				_root = _root[_key]
 		else :
-			raise Exception ("wtf!")
+			raise _error ("837f2c4f")
 	if not isinstance (_root, _type) :
-		raise Exception ("wft!")
+		raise _error ("376bc11b")
 	return _root
 
 
@@ -1497,13 +1497,13 @@ def _coerce (_object, _type, _none_allowed = False) :
 				if _ok :
 					break
 			else :
-				raise Exception ("wtf!")
+				raise _error ("f0188962")
 		if callable (_object) :
 			_object = _object ()
 			continue
 		if _type is None :
 			break
-		raise Exception ("wft! %s %s" % (_object, _type))
+		raise _error ("b6e3ff7d", object = _object, type = _type)
 	return _object
 
 
@@ -1519,8 +1519,25 @@ def _coerce_file (_object, _mode, _none_allowed = False) :
 	elif isinstance (_object, file) :
 		_file = _object
 	else :
-		raise Exception ("wtf!")
+		raise _error ("0c0e6555")
 	return _file
+
+
+def _error (_code, **_attributes) :
+	def _repr (_value) :
+		try :
+			if _value is not None :
+				return _value.__repr__ ()
+			else :
+				return "None"
+		except :
+			return "<error>"
+	if _attributes :
+		_attribute_list = " ".join (["%s := `%s`" % (_repr (_name), _repr (_attributes[_name])) for _name in sorted (_attributes.keys ())])
+		_message = "mpb-errors:%s %s" % (_code, _attributes_list)
+	else :
+		_message = "mpb-errors:%s" % (_code,)
+	return Exception (_message)
 
 
 import logging
@@ -1564,14 +1581,14 @@ elif __name__ == "__main__" :
 			_sources = sys.argv[1]
 			_descriptor = None
 		else :
-			raise Exception ("wft!")
+			raise _error ("5dd6673e")
 		if sys.argv[2].endswith (".rpm") :
 			_package = sys.argv[2]
 		else :
-			raise Exception ("wtf!")
+			raise _error ("820aaabe")
 		
 	else :
-		raise Exception ("wtf!")
+		raise _error ("42aaf640")
 	
 	_configuration["descriptor"] = _descriptor
 	_configuration["sources"] = _sources
@@ -1582,4 +1599,4 @@ elif __name__ == "__main__" :
 	sys.exit (0)
 	
 else :
-	raise Exception ("expected-wrapped")
+	raise _error ("eab7d4a5")
