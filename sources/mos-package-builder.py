@@ -1534,7 +1534,7 @@ def _error (_code, **_attributes) :
 			return "<error>"
 	if _attributes :
 		_attribute_list = " ".join (["%s := `%s`" % (_repr (_name), _repr (_attributes[_name])) for _name in sorted (_attributes.keys ())])
-		_message = "mpb-errors:%s %s" % (_code, _attributes_list)
+		_message = "mpb-errors:%s %s" % (_code, _attribute_list)
 	else :
 		_message = "mpb-errors:%s" % (_code,)
 	return Exception (_message)
