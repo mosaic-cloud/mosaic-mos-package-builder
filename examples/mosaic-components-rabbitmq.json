@@ -1,0 +1,55 @@
+{
+	"_schema" : "tag:ieat.ro,2014:mosaic:v2:mos-package-builder:descriptors:composite-package",
+	"_schema/version" : 1,
+	
+	"package" : {
+		"name" : "@{definitions:package:name}",
+		"version" : "@{definitions:package:version}",
+		"release" : "@{definitions:package:release}",
+		"architecture" : "i686",
+		"root" : "/opt/@{package:identifier}"
+	},
+	
+	"dependencies" : {
+		"provides" : ["@{definitions:package:name}"],
+		"requires" : [
+			"mosaic-rt-erlang-r15b-32bit",
+			"glibc-32bit"
+		]
+	},
+	
+	"miscellaneous" : {
+		"license" : "apache-2.0",
+		"url" : "http://mosaic.ieat.ro/",
+		"summary" : "mOSAIC components RabbitMQ"
+	},
+	
+	"overlays" : [
+		{
+			"generator" : "unarchiver",
+			"target" : "@{package:root}",
+			"resource" : "mosaic-components-rabbitmq.cpio.gz",
+			"format" : "cpio+gzip"
+		}
+	],
+	
+	"resources" : {
+		"mosaic-components-rabbitmq.cpio.gz" : {
+			"generator" : "fetcher",
+			"uri" : "@{definitions:resources:url:base}/mosaic-components-rabbitmq--@{definitions:resources:url:suffix}.cpio.gz"
+		}
+	},
+	
+	"definitions" : {
+		"package:name" : "mosaic-components-rabbitmq",
+		"package:name-qualified" : "@{definitions:package:name}-@{definitions:distribution:identifier}",
+		"package:version" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
+		"package:release" : "@{execution:timestamp}",
+		"distribution:version" : "0.7.0",
+		"distribution:release" : "5",
+		"distribution:label" : "mosaic",
+		"distribution:identifier" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
+		"resources:url:base" : "http://data.volution.ro/ciprian/public/mosaic/packages",
+		"resources:url:suffix" : "@{definitions:distribution:identifier}"
+	}
+}

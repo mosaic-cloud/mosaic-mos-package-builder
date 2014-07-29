@@ -15,6 +15,7 @@
 		"requires" : [
 			"mosaic-rt-erlang-r15b-32bit",
 			"mosaic-rt-nodejs-v0.10-32bit",
+			"glibc-32bit",
 			"iptables"
 		]
 	},
