@@ -21,7 +21,7 @@
 	"miscellaneous" : {
 		"license" : "apache-2.0",
 		"url" : "http://mosaic.ieat.ro/",
-		"summary" : "mOSAIC components Riak"
+		"summary" : "mOSAIC components: Riak"
 	},
 	
 	"overlays" : [

@@ -49,9 +49,9 @@
 			"generator" : "symlinks",
 			"target" : "@{package:root}/bin",
 			"links" : {
-				"/mosaic-node--run-node" : "../lib/mosaic-node/bin/mosaic-node--run-node",
-				"/mosaic-node-wui--run-service" : "../lib/mosaic-node-wui/bin/mosaic-node-wui--run-service",
-				"/mosaic-node-boot--run-boot" : "../lib/mosaic-node-boot/bin/mosaic-node-boot--run-boot"
+				"mosaic-node--run-node" : "../lib/mosaic-node/bin/mosaic-node--run-node",
+				"mosaic-node-wui--run-service" : "../lib/mosaic-node-wui/bin/mosaic-node-wui--run-service",
+				"mosaic-node-boot--run-boot" : "../lib/mosaic-node-boot/bin/mosaic-node-boot--run-boot"
 			}
 		}
 	],

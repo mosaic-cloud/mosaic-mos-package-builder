@@ -21,7 +21,7 @@
 	"miscellaneous" : {
 		"license" : "apache-2.0",
 		"url" : "http://mosaic.ieat.ro/",
-		"summary" : "mOSAIC components Java cloudlet container"
+		"summary" : "mOSAIC components: Java cloudlet container"
 	},
 	
 	"overlays" : [
