@@ -35,16 +35,26 @@ def _main (_configuration) :
 	elif path.isdir (_sources) :
 		_sources_root = path.realpath (_sources)
 		_sources_archive = None
-	elif path.isfile (_sources) :
+	elif path.isfile (_sources) or path.exists (_sources) :
+		# FIXME: Check if the path is a regular file or a fifo (not something else)!
 		_logger.debug ("extracting sources archive...")
 		_sources_archive = _sources
 		_sources_root = path.realpath (path.join (_temporary, "sources"))
-		SafeZipExtractCommand () .execute (_sources_root, _sources_archive)
+		if _sources_archive.endswith (".zip") :
+			SafeZipExtractCommand () .execute (_sources_root, _sources_archive)
+		elif _sources_archive.endswith (".tar") :
+			SafeTarExtractCommand () .execute (_sources_root, _sources_archive)
+		elif _sources_archive.endswith (".cpio") :
+			SafeCpioExtractCommand () .execute (_sources_root, _sources_archive)
+		else :
+			raise _error ("wtf!")
 	else :
 		raise _error ("wtf!")
 	
 	if _descriptor is None :
 		_logger.info ("unspecified descriptor; using `package.json`!")
+		if _sources_root is None :
+			raise _error ("wtf!")
 		_descriptor = path.join (_sources_root, "package.json")
 	_descriptor = path.realpath (_descriptor)
 	
@@ -1205,6 +1215,22 @@ class CpioExtractCommand (BasicCommand) :
 				stdin = _input, root = _target)
 
 
+class SafeCpioExtractCommand (Command) :
+	
+	def __init__ (self, **_arguments) :
+		Command.__init__ (self)
+		self._mkdir = MkdirCommand (**_arguments)
+		self._cpio = CpioExtractCommand (**_arguments)
+		self._mv = MvCommand (**_arguments)
+	
+	def instantiate (self, _target, _archive) :
+		_safe_target = _resolve_temporary_path (_target)
+		_mkdir = self._mkdir.instantiate (_safe_target)
+		_cpio = self._cpio.instantiate (_safe_target, _archive)
+		_mv = self._mv.instantiate (_target, _safe_target)
+		return SequentialCommandInstance ([_mkdir, _cpio, _mv])
+
+
 class TarExtractCommand (BasicCommand) :
 	
 	def __init__ (self, **_arguments) :
@@ -1218,6 +1244,22 @@ class TarExtractCommand (BasicCommand) :
 						"--delay-directory-restore", "--no-overwrite-dir", "--keep-directory-symlink",
 						"--preserve-permissions", "--no-same-owner"],
 				stdin = _input)
+
+
+class SafeTarExtractCommand (Command) :
+	
+	def __init__ (self, **_arguments) :
+		Command.__init__ (self)
+		self._mkdir = MkdirCommand (**_arguments)
+		self._tar = TarExtractCommand (**_arguments)
+		self._mv = MvCommand (**_arguments)
+	
+	def instantiate (self, _target, _archive) :
+		_safe_target = _resolve_temporary_path (_target)
+		_mkdir = self._mkdir.instantiate (_safe_target)
+		_tar = self._tar.instantiate (_safe_target, _archive)
+		_mv = self._mv.instantiate (_target, _safe_target)
+		return SequentialCommandInstance ([_mkdir, _tar, _mv])
 
 
 class CurlCommand (BasicCommand) :
