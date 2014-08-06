@@ -14,7 +14,7 @@ import uuid
 def _main (_configuration) :
 	
 	_descriptor = _configuration["descriptor"]
-	_sources_archive = _configuration["sources"]
+	_sources = _configuration["sources"]
 	_package_archive = _configuration["package"]
 	_temporary = _configuration["temporary"]
 	
@@ -28,18 +28,25 @@ def _main (_configuration) :
 		_temporary = path.realpath (path.join (path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/temporary", uuid.uuid4 () .hex)))
 		MkdirCommand () .execute (_temporary, True)
 	
-	_sources_scratch = path.realpath (path.join (_temporary, "sources"))
-	_package_scratch = path.realpath (path.join (_temporary, "package"))
+	if _sources is None :
+		_logger.info ("unspecified sources; ignoring!")
+		_sources_root = None
+		_sources_archive = None
+	elif path.isdir (_sources) :
+		_sources_root = path.realpath (_sources)
+		_sources_archive = None
+	elif path.isfile (_sources) :
+		_logger.debug ("extracting sources archive...")
+		_sources_archive = _sources
+		_sources_root = path.realpath (path.join (_temporary, "sources"))
+		SafeZipExtractCommand () .execute (_sources_root, _sources_archive)
+	else :
+		raise _error ("wtf!")
 	
 	if _descriptor is None :
 		_logger.info ("unspecified descriptor; using `package.json`!")
-		_descriptor = path.join (_sources_scratch, "package.json")
+		_descriptor = path.join (_sources_root, "package.json")
 	_descriptor = path.realpath (_descriptor)
-	
-	if _sources_archive is None :
-		_logger.info ("unspecified sources archive; ignoring!")
-	else :
-		_sources_archive = path.realpath (_sources_archive)
 	
 	if _package_archive is None :
 		_logger.info ("unspecified package archive; using `package.rpm`!")
@@ -47,10 +54,12 @@ def _main (_configuration) :
 	else :
 		_package_archive = path.realpath (_package_archive)
 	
+	_package_scratch = path.realpath (path.join (_temporary, "package"))
+	
 	_logger.info ("arguments:")
 	_logger.info ("  -> descriptor: `%s`;", _descriptor)
 	_logger.info ("  -> sources archive: `%s`;", _sources_archive)
-	_logger.info ("  -> sources scratch: `%s`;", _sources_scratch)
+	_logger.info ("  -> sources root: `%s`;", _sources_root)
 	_logger.info ("  -> package archive: `%s`;", _package_archive)
 	_logger.info ("  -> package scratch: `%s`;", _package_scratch)
 	_logger.info ("  -> temporary: `%s`;", _temporary)
@@ -62,12 +71,6 @@ def _main (_configuration) :
 	os.chdir (_temporary)
 	os.environ["TMPDIR"] = _temporary
 	
-	if _sources_archive is not None :
-		if os.path.exists (_sources_archive) :
-			_logger.debug ("extracting sources archive...")
-			SafeZipExtractCommand () .execute (_sources_scratch, _sources_archive)
-		else :
-			_logger.warn ("missing sources archive; ignoring!")
 	
 	if os.path.exists (_package_archive) :
 		_logger.warn ("existing package archive; deleting!")
@@ -86,7 +89,7 @@ def _main (_configuration) :
 	_logger.info ("initializing builder...")
 	_builder = _create_builder (
 			descriptor = _json_load (_descriptor),
-			sources = _sources_scratch,
+			sources = _sources_root,
 			package_archive = _package_archive,
 			package_outputs = _package_scratch,
 			temporary = _temporary,
@@ -106,7 +109,7 @@ def _main (_configuration) :
 		
 		_scroll.stream (lambda _line : _logger.debug ("%s", _line))
 	
-	if False :
+	if True :
 		_scroll = Scroll ()
 		
 		_scroll.append ("prepare commands:")
@@ -201,11 +204,16 @@ class Builder (object) :
 		
 		if _generator == "fetcher" :
 			_uri = ExpandableStringValue (self._context, _json_select (_descriptor, ("uri",), basestring), pattern = _resource_uri_re)
-			_output = PathValue (self._context, [self._resource_outputs, _identifier], pattern = _normal_path_re)
-			_resource = FetcherResource (self, _identifier, _uri, _output)
+			_target = PathValue (self._context, [_identifier], pattern = _target_path_re)
+			_resource = FetcherResource (self, _identifier, _uri, self._resource_outputs, _target)
+			
+		elif _generator == "sources" :
+			_source = PathValue (self._context, [ExpandableStringValue (self._context, _json_select (_descriptor, ("path",), basestring))], pattern = _target_path_re)
+			_target = PathValue (self._context, [_identifier], pattern = _target_path_re)
+			_resource = ClonedResource (self, _identifier, self._sources, _source, self._resource_outputs, _target)
 			
 		else :
-			raise _error ("cf3a6b47")
+			raise _error ("cf3a6b47", identifier = _identifier, descriptor = _descriptor)
 		
 		self._resources[_identifier] = _resource
 	
@@ -223,6 +231,11 @@ class Builder (object) :
 			_format = ExpandableStringValue (self._context, _json_select (_descriptor, ("format",), basestring))
 			_overlay = UnarchiverOverlay (self, _root, _target, lambda : _resource () .path, _format)
 			
+		elif _generator == "file-creator" :
+			_resource = ResolvableValue (self._context, ExpandableStringValue (self._context, _json_select (_descriptor, ("resource",), basestring), pattern = _context_value_identifier_re), self.resolve_resource)
+			_expand = _json_select (_descriptor, ("expand",), bool)
+			_overlay = FileCreatorOverlay (self, _root, _target, _resource () .path, _expand, self._context.resolve_value)
+			
 		elif _generator == "symlinks" :
 			_links = []
 			for _link_target in _json_select (_descriptor, ("links",), dict) :
@@ -232,8 +245,15 @@ class Builder (object) :
 				_links.append ((_link_target, _link_source))
 			_overlay = SymlinksOverlay (self, _root, _target, _links)
 			
+		elif _generator == "folders" :
+			_folders = []
+			for _folder_target in _json_select (_descriptor, ("folders",), list) :
+				_folder_target = PathValue (self._context, [ExpandableStringValue (self._context, _folder_target)], pattern = _target_path_re)
+				_folders.append (_folder_target)
+			_overlay = FoldersOverlay (self, _root, _target, _folders)
+			
 		else :
-			raise _error ("93fe5c5d")
+			raise _error ("93fe5c5d", descriptor = _descriptor)
 		
 		self._overlays.append (_overlay)
 	
@@ -625,8 +645,11 @@ class UnarchiverOverlay (Overlay) :
 		if _format == "cpio+gzip" :
 			_archive_format = "cpio"
 			_stream_format = "gzip"
+		elif _format == "tar+gzip" :
+			_archive_format = "tar"
+			_stream_format = "gzip"
 		else :
-			raise _error ("bad3ec12")
+			raise _error ("bad3ec12", format = self._format)
 		
 		_commands = []
 		
@@ -640,18 +663,22 @@ class UnarchiverOverlay (Overlay) :
 			_stream = self._resource
 			
 		else :
-			raise _error ("6534e0ed")
+			raise _error ("6534e0ed", format = _stream_format)
 		
 		_target = PathValue (None, [self._root, self._target])
 		
 		if _archive_format == "cpio" :
 			_command = CpioExtractCommand (**self._command_arguments) .instantiate (_target, _stream)
 			_commands.append (_command)
+			
+		elif _archive_format == "tar" :
+			_command = TarExtractCommand (**self._command_arguments) .instantiate (_target, _stream)
+			_commands.append (_command)
+			
+		else :
+			raise _error ("wtf!", format = _archive_format)
 		
 		_commands = ParallelCommandInstance (_commands)
-		
-		_command = MkdirCommand (**self._command_arguments) .instantiate (_target, True)
-		_commands = SequentialCommandInstance ([_command, _commands])
 		
 		return _commands
 	
@@ -663,6 +690,31 @@ class UnarchiverOverlay (Overlay) :
 		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
 
 
+class FileCreatorOverlay (Overlay) :
+	
+	def __init__ (self, _builder, _root, _target, _resource, _expand, _resolver) :
+		Overlay.__init__ (self, _builder, _root, _target)
+		self._resource = _resource
+		self._expand = _expand
+		self._resolver = _resolver
+	
+	def instantiate (self) :
+		_target = PathValue (None, [self._root, self._target])
+		if not self._expand :
+			_command = CpCommand (**self._command_arguments) .instantiate (_target, self._resource)
+		else :
+			_command = ExpandFileCommand (self._resolver, **self._command_arguments) .instantiate (_target, self._resource)
+		return _command
+	
+	def describe (self, _scroll) :
+		_scroll.append ("file creator overlay:")
+		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
+		_scroll.appendf ("resource: `%s`;", self._resource, indentation = 1)
+		_scroll.appendf ("expand: `%s`;", self._expand, indentation = 1)
+		_scroll.appendf ("resolver: `%s`;", repr (self._resolver), indentation = 1)
+		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
+
+
 class SymlinksOverlay (Overlay) :
 	
 	def __init__ (self, _builder, _root, _target, _links) :
@@ -671,8 +723,6 @@ class SymlinksOverlay (Overlay) :
 	
 	def instantiate (self) :
 		_commands = []
-		_command = MkdirCommand (**self._command_arguments) .instantiate (PathValue (None, [self._root, self._target]), True)
-		_commands.append (_command)
 		for _target, _source in self._links :
 			_target = PathValue (None, [self._root, self._target, _target])
 			_commands.append (LnCommand (**self._command_arguments) .instantiate (_target, _source, True))
@@ -691,6 +741,28 @@ class SymlinksOverlay (Overlay) :
 		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
 
 
+class FoldersOverlay (Overlay) :
+	
+	def __init__ (self, _builder, _root, _target, _folders) :
+		Overlay.__init__ (self, _builder, _root, _target)
+		self._folders = _folders
+	
+	def instantiate (self) :
+		_commands = []
+		for _target in self._folders :
+			_target = PathValue (None, [self._root, self._target, _target])
+			_commands.append (MkdirCommand (**self._command_arguments) .instantiate (_target, True))
+		return SequentialCommandInstance (_commands)
+	
+	def describe (self, _scroll) :
+		_scroll.append ("folders overlay:")
+		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
+		_scroll.append ("folders:", indentation = 1)
+		for _target in sorted (self._folders) :
+			_scroll.appendf ("`%s`;", _target, indentation = 2)
+		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
+
+
 class Resource (object) :
 	
 	def __init__ (self, _builder, _identifier) :
@@ -704,22 +776,49 @@ class Resource (object) :
 		raise _error ("4b7ca4e7")
 
 
-class FetcherResource (Resource) :
+class ClonedResource (Resource) :
 	
-	def __init__ (self, _builder, _identifier, _uri, _output) :
+	def __init__ (self, _builder, _identifier, _inputs, _source, _outputs, _target) :
 		Resource.__init__ (self, _builder, _identifier)
-		self._uri = _uri
-		self._output = _output
-		self.path = self._output
+		self._inputs = _inputs
+		self._source = _source
+		self._outputs = _outputs
+		self._target = _target
+		self.path = PathValue (None, [self._outputs, self._target])
 	
 	def instantiate (self) :
-		return SafeCurlCommand (**self._command_arguments) .instantiate (self._output, self._uri)
+		_source = PathValue (None, [self._inputs, self._source])
+		return CpCommand (**self._command_arguments) .instantiate (self.path, _source)
+	
+	def describe (self, _scroll) :
+		_scroll.append ("sources resource:")
+		_scroll.appendf ("identifier: `%s`;", self._identifier, indentation = 1)
+		_scroll.appendf ("inputs: `%s`;", self._inputs, indentation = 1)
+		_scroll.appendf ("source: `%s`;", self._source, indentation = 1)
+		_scroll.appendf ("outputs: `%s`;", self._outputs, indentation = 1)
+		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
+		_scroll.appendf ("path: `%s`;", self.path, indentation = 1)
+
+
+class FetcherResource (Resource) :
+	
+	def __init__ (self, _builder, _identifier, _uri, _outputs, _target) :
+		Resource.__init__ (self, _builder, _identifier)
+		self._uri = _uri
+		self._outputs = _outputs
+		self._target = _target
+		self.path = PathValue (None, [self._outputs, self._target])
+	
+	def instantiate (self) :
+		return SafeCurlCommand (**self._command_arguments) .instantiate (self.path, self._uri)
 	
 	def describe (self, _scroll) :
 		_scroll.append ("fetcher resource:")
 		_scroll.appendf ("identifier: `%s`;", self._identifier, indentation = 1)
 		_scroll.appendf ("uri: `%s`;", self._uri, indentation = 1)
-		_scroll.appendf ("output: `%s`;", self._output, indentation = 1)
+		_scroll.appendf ("outputs: `%s`;", self._outputs, indentation = 1)
+		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
+		_scroll.appendf ("path: `%s`;", self.path, indentation = 1)
 
 
 class Context (object) :
@@ -730,9 +829,9 @@ class Context (object) :
 	
 	def register_value (self, _identifier, _value) :
 		if _context_value_identifier_re.match (_identifier) is None :
-			raise _error ("e3f0d909")
+			raise _error ("e3f0d909", identifier = _identifier)
 		if _identifier in self._resolvable_values :
-			raise _error ("4a5a0274")
+			raise _error ("4a5a0274", identifier = _identifier)
 		self._resolvable_values[_identifier] = _value
 		return _value
 	
@@ -742,7 +841,7 @@ class Context (object) :
 		_value = self._resolvable_values[_identifier]
 		return _value
 
-_context_value_identifier_part_pattern = "(?:[a-z0-9](?:[.-]?[a-z0-9])*)"
+_context_value_identifier_part_pattern = "(?:[a-zA-Z0-9](?:[._-]?[a-zA-Z0-9])*)"
 _context_value_identifier_pattern = "(?:%s(?::%s)*)" % (_context_value_identifier_part_pattern, _context_value_identifier_part_pattern)
 _context_value_identifier_re = re.compile ("^%s$" % (_context_value_identifier_pattern,))
 
@@ -825,25 +924,25 @@ class ExpandableStringValue (ContextValue) :
 		
 		ContextValue.__init__ (self, _context, constraints = constraints, **_arguments)
 		self._template = _template
-		self._coercer = type (self._template)
 	
 	def _resolve (self) :
 		_match = _expandable_string_template_re.match (self._template)
 		if _match is None :
 			raise _error ("cee1f00b")
-		_value = re.sub (_expandable_string_template_variable_re, self._resolve_variable_value, self._template)
-		return _value
-	
-	def _resolve_variable_value (self, _identifier_match) :
-		_identifier = _identifier_match.group (0) [2 : -1]
-		_value = self._context.resolve_value (_identifier)
-		_value = _value ()
-		_value = self._coercer (_value)
+		_value = _expand_string_template (self._template, self._context.resolve_value)
 		return _value
 	
 	def __repr__ (self) :
 		return self ()
 
+def _expand_string_template (_template, _resolver) :
+	def _expand (_identifier_match) :
+		_identifier = _identifier_match.group (0) [2 : -1]
+		_value = _resolver (_identifier)
+		_value = _coerce (_value, None)
+		_value = type (_template) (_value)
+		return _value
+	return re.sub (_expandable_string_template_variable_re, _expand, _template)
 
 _expandable_string_template_variable_pattern = "(?:@\{%s\})" % (_context_value_identifier_pattern,)
 _expandable_string_template_variable_re = _expandable_string_template_variable_pattern
@@ -1106,6 +1205,21 @@ class CpioExtractCommand (BasicCommand) :
 				stdin = _input, root = _target)
 
 
+class TarExtractCommand (BasicCommand) :
+	
+	def __init__ (self, **_arguments) :
+		BasicCommand.__init__ (self, "tar", **_arguments)
+	
+	def instantiate (self, _target, _input) :
+		return self._instantiate_1 (
+				[
+						"--extract",
+						"--directory", _target,
+						"--delay-directory-restore", "--no-overwrite-dir", "--keep-directory-symlink",
+						"--preserve-permissions", "--no-same-owner"],
+				stdin = _input)
+
+
 class CurlCommand (BasicCommand) :
 	
 	def __init__ (self, **_arguments) :
@@ -1127,6 +1241,29 @@ class SafeCurlCommand (Command) :
 		_curl = self._curl.instantiate (_safe_target, _uri)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_curl, _mv])
+
+
+class ExpandFileCommand (Command) :
+	
+	def __init__ (self, _resolver, **_arguments) :
+		Command.__init__ (self)
+		self._resolver = _resolver
+		self._create = FileCreateCommand (**_arguments)
+		self._mv = MvCommand (**_arguments)
+	
+	def instantiate (self, _target, _source) :
+		_safe_target = PathValue (None, [_target], temporary = True)
+		def _chunks () :
+			with _coerce_file (_source, "r") as _stream :
+				for _line in _stream :
+					_line = self._expand (_line)
+					yield _line + "\n"
+		_create = self._create.instantiate (_safe_target, _chunks)
+		_mv = self._mv.instantiate (_target, _safe_target)
+		return SequentialCommandInstance ([_create, _mv])
+	
+	def _expand (self, _line) :
+		return _expand_string_template (_line, self._resolver)
 
 
 class RpmBuildCommand (BasicCommand) :
@@ -1327,7 +1464,7 @@ class FileCreateCommandInstance (object) :
 	def describe (self, _scroll) :
 		_scroll.append ("file create command:")
 		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
-		_scroll.appendf ("chunks: `%s`;", self._chunks, indentation = 1)
+		_scroll.appendf ("chunks: `%s`;", repr (self._chunks), indentation = 1)
 
 
 class SafeFileCreateCommand (Command) :
@@ -1447,23 +1584,23 @@ def _json_select (_root, _keys, _type, required = True, default = None) :
 	for _key in _keys :
 		if isinstance (_key, basestring) :
 			if not isinstance (_root, dict) :
-				raise _error ("ffb8eb08")
+				raise _error ("ffb8eb08", root = _root)
 			elif _key in _root :
 				_root = _root[_key]
 			elif required :
-				raise _error ("a56daa10")
+				raise _error ("a56daa10", key = _key)
 			else :
 				_root = default
 				break
 		elif isinstance (_key, int) :
 			if not isinstance (_root, list) :
-				raise _error ("d742b4cf")
+				raise _error ("d742b4cf", root = _root)
 			else :
 				_root = _root[_key]
 		else :
-			raise _error ("837f2c4f")
+			raise _error ("837f2c4f", key = _key)
 	if not isinstance (_root, _type) :
-		raise _error ("376bc11b")
+		raise _error ("376bc11b", root = _root, type = _type)
 	return _root
 
 
@@ -1473,7 +1610,7 @@ def _resolve_executable_path (_name) :
 
 
 def _resolve_temporary_path (_target) :
-	return "%s/.tmp--%s--%s" % (path.dirname (_target), path.basename (_target), _create_token ())
+	return "%s/.temporary--%s--%s" % (path.dirname (_target), path.basename (_target), _create_token ())
 
 
 def _create_token () :
@@ -1533,10 +1670,10 @@ def _error (_code, **_attributes) :
 		except :
 			return "<error>"
 	if _attributes :
-		_attribute_list = " ".join (["%s := `%s`" % (_repr (_name), _repr (_attributes[_name])) for _name in sorted (_attributes.keys ())])
-		_message = "mpb-errors:%s %s" % (_code, _attribute_list)
+		_attribute_list = "; ".join (["%s := `%s`" % (_name, _repr (_attributes[_name])) for _name in sorted (_attributes.keys ())])
+		_message = "mpb-error: %s; %s" % (_code, _attribute_list)
 	else :
-		_message = "mpb-errors:%s" % (_code,)
+		_message = "mpb-error: %s" % (_code,)
 	return Exception (_message)
 
 
@@ -1578,6 +1715,9 @@ elif __name__ == "__main__" :
 			_descriptor = sys.argv[1]
 			_sources = None
 		elif sys.argv[1].endswith (".zip") :
+			_sources = sys.argv[1]
+			_descriptor = None
+		elif path.isdir (sys.argv[1]) :
 			_sources = sys.argv[1]
 			_descriptor = None
 		else :
