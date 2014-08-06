@@ -18,28 +18,23 @@ else :
 if not path.exists (_temporary) :
 	os.makedirs (_temporary)
 
-_sources_suffixes = [".zip", ".tar", ".cpio"]
-for _sources_suffix in _sources_suffixes :
-	_sources = path.join (_workbench, "sources" + _sources_suffix)
-	if path.exists (_sources) :
-		break
-	_sources = None
-
-_package = path.join (_workbench, "package.rpm")
-
 _script = "http://data.volution.ro/ciprian/public/mosaic/tools/mos-package-builder.py"
 
 _configuration = {
 		
 		"descriptor" : None,
-		"sources" : _sources,
-		"package" : _package,
-		"temporary" : _temporary,
+		"sources" : None,
+		"package" : None,
 		
 		"package-name" : os.environ.get ("PackageName"),
 		"package-version" : os.environ.get ("PackageVersion"),
 		"package-release" : os.environ.get ("PackageRelease"),
 		"package-distribution" : os.environ.get ("PackageDistribution"),
+		
+		"workbench" : _workbench,
+		"temporary" : _temporary,
+		
+		"execute" : True,
 }
 
 _script, _headers = urllib.urlretrieve (_script, path.join (_temporary, "builder.py"))

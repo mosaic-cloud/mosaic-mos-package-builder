@@ -16,6 +16,7 @@ def _main (_configuration) :
 	_descriptor = _configuration["descriptor"]
 	_sources = _configuration["sources"]
 	_package_archive = _configuration["package"]
+	_workbench = _configuration["workbench"]
 	_temporary = _configuration["temporary"]
 	
 	_package_name = _configuration["package-name"]
@@ -23,10 +24,19 @@ def _main (_configuration) :
 	_package_release = _configuration["package-release"]
 	_package_distribution = _configuration["package-distribution"]
 	
+	_execute = _configuration["execute"]
+	
 	if _temporary is None :
 		_logger.info ("unspecified temporary; using a random one!")
 		_temporary = path.realpath (path.join (path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/temporary", uuid.uuid4 () .hex)))
 		MkdirCommand () .execute (_temporary, True)
+	
+	if _sources is None :
+		if _workbench is not None :
+			for _sources_name in ["sources", "sources.zip", "sources.tar", "sources.cpio"] :
+				if path.exists (path.join (_workbench, _sources_name)) :
+					_sources = path.join (_workbench, _sources_name)
+					break
 	
 	if _sources is None :
 		_logger.info ("unspecified sources; ignoring!")
@@ -52,11 +62,20 @@ def _main (_configuration) :
 		raise _error ("wtf!")
 	
 	if _descriptor is None :
+		if _workbench is not None :
+			if path.exists (path.join (_workbench, "package.json")) :
+				_descriptor = path.join (_workbench, "package.json")
+	
+	if _descriptor is None :
 		_logger.info ("unspecified descriptor; using `package.json`!")
 		if _sources_root is None :
 			raise _error ("wtf!")
 		_descriptor = path.join (_sources_root, "package.json")
 	_descriptor = path.realpath (_descriptor)
+	
+	if _package_archive is None :
+		if _workbench is not None :
+			_package_archive = path.join (_workbench, "package.rpm")
 	
 	if _package_archive is None :
 		_logger.info ("unspecified package archive; using `package.rpm`!")
@@ -144,7 +163,7 @@ def _main (_configuration) :
 		
 		_scroll.stream (lambda _line : _logger.debug ("%s", _line))
 	
-	if os.environ.get ("__execute__") == "__true__" :
+	if _execute :
 		
 		_logger.info ("executing prepare commands...")
 		_prepare.execute ()
@@ -462,7 +481,7 @@ class CompositePackageBuilder (Builder) :
 		
 		_commands.append (MkdirCommand (**self._command_arguments) .instantiate (self.rpm_outputs))
 		
-		_commands.append (RpmBuildCommand (**self._command_arguments) .instantiate (self.rpm_spec,
+		_commands.append (RpmBuildCommand (setarch = self.package_architecture, **self._command_arguments) .instantiate (self.rpm_spec,
 				
 				rpm_macros = "/dev/null",
 				rpm_buildroot = self._package_outputs,
@@ -496,11 +515,9 @@ class CompositePackageBuilder (Builder) :
 						"__spec_clean_cmd" : _true_path,
 				},
 				
-				# rpm_rc = "/dev/null",
+				rpm_rc = "/dev/null",
 				rpm_db = PathValue (None, [self.rpm_outputs, "DB"]),
-				
-				strace = None),
-		)
+		))
 		
 		_commands.append (CpCommand (**self._command_arguments) .instantiate (
 				self._package_archive,
@@ -1083,25 +1100,47 @@ class Command (object) :
 
 class BasicCommand (Command) :
 	
-	def __init__ (self, _executable, environment = {}) :
+	def __init__ (self, _executable, environment = {}, setarch = None, strace = None) :
 		Command.__init__ (self)
 		self._executable = _resolve_executable_path (_executable)
 		self._argument0 = None
 		self._environment = environment
+		self._setarch = setarch
+		self._strace = strace
 	
-	def _instantiate_1 (self, _arguments, stdin = None, stdout = None, stderr = None, root = None, strace = None) :
-		if strace is None :
-			return ExternalCommandInstance (self._executable, self._argument0, _arguments, self._environment, stdin, stdout, stderr, root)
-		else :
-			_strace_executable = "strace"
+	def _instantiate_1 (self, _arguments, stdin = None, stdout = None, stderr = None, root = None) :
+		
+		_wrapper = []
+		
+		if self._strace is not None :
+			_strace_executable = _resolve_executable_path ("strace")
 			_strace_arguments = []
 			_strace_arguments.extend (["-f"])
 			for _strace_event in strace :
 				_strace_arguments.extend (["-e", _strace_event])
 			_strace_arguments.append ("--")
-			_strace_arguments.append (self._executable)
-			_strace_arguments.extend (_arguments)
-			return ExternalCommandInstance (_strace_executable, None, _strace_arguments, self._environment, stdin, stdout, stderr, root)
+			
+			_wrapper = [_strace_executable] + _strace_arguments + _wrapper
+		
+		if self._setarch is not None :
+			_setarch_executable = _resolve_executable_path ("setarch")
+			_setarch_arguments = [self._setarch, "--"]
+			
+			_wrapper = [_setarch_executable] + _setarch_arguments + _wrapper
+		
+		if len (_wrapper) == 0 :
+			_wrapper = None
+		
+		if _wrapper is not None :
+			_executable = _wrapper[0]
+			_argument0 = None
+			_arguments = _wrapper[1:] + [self._executable] + _arguments
+			
+		else :
+			_executable = self._executable
+			_argument0 = self._argument0
+		
+		return ExternalCommandInstance (_executable, _argument0, _arguments, self._environment, stdin, stdout, stderr, root)
 
 
 class MkdirCommand (BasicCommand) :
@@ -1241,7 +1280,8 @@ class TarExtractCommand (BasicCommand) :
 				[
 						"--extract",
 						"--directory", _target,
-						"--delay-directory-restore", "--no-overwrite-dir", "--keep-directory-symlink",
+						"--delay-directory-restore", "--no-overwrite-dir",
+						# "--keep-directory-symlink",
 						"--preserve-permissions", "--no-same-owner"],
 				stdin = _input)
 
@@ -1313,7 +1353,7 @@ class RpmBuildCommand (BasicCommand) :
 	def __init__ (self, **_arguments) :
 		BasicCommand.__init__ (self, "rpmbuild", **_arguments)
 	
-	def instantiate (self, _spec, rpm_macros = None, rpm_buildroot = None, rpm_buildtarget = None, rpm_defines = None, rpm_rc = None, rpm_db = None, quiet = True, debug = False, strace = None) :
+	def instantiate (self, _spec, rpm_macros = None, rpm_buildroot = None, rpm_buildtarget = None, rpm_defines = None, rpm_rc = None, rpm_db = None, quiet = True, debug = False) :
 		
 		_arguments = []
 		
@@ -1344,7 +1384,7 @@ class RpmBuildCommand (BasicCommand) :
 		_arguments.append ("--")
 		_arguments.append (_spec)
 		
-		return self._instantiate_1 (_arguments, strace = strace)
+		return self._instantiate_1 (_arguments)
 
 
 class SequentialCommandInstance (object) :
@@ -1648,7 +1688,11 @@ def _json_select (_root, _keys, _type, required = True, default = None) :
 
 def _resolve_executable_path (_name) :
 	# FIXME: !!!
-	return ("/bin/" + _name)
+	for _prefix in ["/usr/local/bin", "/usr/bin", "/bin"] :
+		_path = path.join (_prefix, _name)
+		if path.exists (_path) :
+			return _path
+	raise _error ("wtf!")
 
 
 def _resolve_temporary_path (_target) :
@@ -1738,25 +1782,28 @@ elif __name__ == "__main__" :
 			"descriptor" : None,
 			"sources" : None,
 			"package" : None,
+			"workbench" : None,
 			"temporary" : None,
 			
 			"package-name" : None,
 			"package-version" : None,
 			"package-release" : None,
 			"package-distribution" : None,
+			
+			"execute" : False,
 	}
 	
 	if len (sys.argv) == 2 :
 		_workbench = sys.argv[1]
-		_sources = path.join (_workbench, "sources.zip")
-		_package = path.join (_workbench, "package.rpm")
+		_sources = None
+		_package = None
 		_descriptor = None
 		
 	elif len (sys.argv) == 3 :
 		if sys.argv[1].endswith (".json") :
 			_descriptor = sys.argv[1]
 			_sources = None
-		elif sys.argv[1].endswith (".zip") :
+		elif sys.argv[1].endswith (".zip") or sys.argv[1].endswith (".tar") or sys.argv[1].endswith (".cpio") :
 			_sources = sys.argv[1]
 			_descriptor = None
 		elif path.isdir (sys.argv[1]) :
@@ -1768,6 +1815,7 @@ elif __name__ == "__main__" :
 			_package = sys.argv[2]
 		else :
 			raise _error ("820aaabe")
+		_workbench = None
 		
 	else :
 		raise _error ("42aaf640")
@@ -1775,6 +1823,10 @@ elif __name__ == "__main__" :
 	_configuration["descriptor"] = _descriptor
 	_configuration["sources"] = _sources
 	_configuration["package"] = _package
+	_configuration["workbench"] = _workbench
+	
+	if os.environ.get ("__execute__") == "__true__" :
+		_configuration["execute"] = True
 	
 	_main (_configuration)
 	
