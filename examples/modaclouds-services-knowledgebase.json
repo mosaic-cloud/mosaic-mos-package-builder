@@ -1,0 +1,127 @@
+{
+	"_schema" : "tag:ieat.ro,2014:mosaic:v2:mos-package-builder:descriptors:composite-package",
+	"_schema/version" : 1,
+	
+	"package" : {
+		"name" : "@{definitions:package:name}",
+		"version" : "@{definitions:package:version}",
+		"release" : "@{definitions:package:release}",
+		"architecture" : "i686",
+		"root" : "/opt/@{package:identifier}"
+	},
+	
+	"dependencies" : {
+		"provides" : ["@{definitions:package:name}"],
+		"requires" : [
+			"mosaic-rt-jre-7-32bit",
+			"mosaic-rt-ruby-v1.9-32bit",
+			"glibc-32bit"
+		]
+	},
+	
+	"miscellaneous" : {
+		"license" : "apache-2.0",
+		"url" : "http://modaclouds.eu/",
+		"summary" : "MODAClouds services: knowledgebase"
+	},
+	
+	"overlays" : [
+		{
+			"generator" : "folders",
+			"target" : "@{package:root}",
+			"folders" : [
+				"/",
+				"/etc",
+				"/bin",
+				"/lib",
+				"/etc/fuseki",
+				"/lib/fuseki",
+				"/var/fuseki",
+				"/lib/scripts"
+			]
+		},
+		{
+			"generator" : "unarchiver",
+			"target" : "@{package:root}/lib/fuseki",
+			"resource" : "fuseki-distribution.tar.gz",
+			"format" : "tar+gzip",
+			"strip-components" : 1
+		},
+		{
+			"generator" : "file-creator",
+			"target" : "@{package:root}/lib/scripts/run.bash",
+			"resource" : "service-run.bash",
+			"expand" : true
+		},
+		{
+			"generator" : "file-creator",
+			"target" : "@{package:root}/lib/scripts/initialize.bash",
+			"resource" : "service-initialize.bash",
+			"expand" : true
+		},
+		{
+			"generator" : "file-creator",
+			"target" : "@{package:root}/etc/fuseki/configuration.ttl",
+			"resource" : "fuseki-configuration.ttl",
+			"expand" : true
+		},
+		{
+			"generator" : "file-creator",
+			"target" : "@{package:root}/etc/fuseki/ontology.ttl",
+			"resource" : "fuseki-ontology.ttl",
+			"expand" : true
+		},
+		{
+			"generator" : "symlinks",
+			"target" : "@{package:root}/bin",
+			"links" : {
+				"@{package:name}--run-service" : "../lib/scripts/run.bash",
+				"@{package:name}--initialize-service" : "../lib/scripts/initialize.bash"
+			}
+		}
+	],
+	
+	"resources" : {
+		"service-run.bash" : {
+			"generator" : "sources",
+			"path" : "service-run.bash"
+		},
+		"service-initialize.bash" : {
+			"generator" : "sources",
+			"path" : "service-initialize.bash"
+		},
+		"fuseki-configuration.ttl" : {
+			"generator" : "sources",
+			"path" : "fuseki-configuration.ttl"
+		},
+		"fuseki-ontology.ttl" : {
+			"generator" : "sources",
+			"path" : "fuseki-ontology.ttl"
+		},
+		"fuseki-distribution.tar.gz" : {
+			"generator" : "fetcher",
+			"uri" : "@{definitions:resources:modaclouds:url:dependencies}/jena-fuseki-@{definitions:versions:modaclouds:fuseki}-distribution.tar.gz"
+		}
+	},
+	
+	"definitions" : {
+		"package:name" : "modaclouds-services-knowledgebase",
+		"package:name-qualified" : "@{definitions:package:name}-@{definitions:distribution:identifier}",
+		"package:version" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
+		"package:release" : "@{execution:timestamp}",
+		"distribution:version" : "0.7.0",
+		"distribution:release" : "5",
+		"distribution:label" : "modaclouds",
+		"distribution:identifier" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
+		"resources:modaclouds:url:base" : "http://data.volution.ro/ciprian/public/modaclouds",
+		"resources:modaclouds:url:packages" : "@{definitions:resources:modaclouds:url:base}/packages",
+		"resources:modaclouds:url:dependencies" : "@{definitions:resources:modaclouds:url:base}/dependencies",
+		"resources:modaclouds:url:suffix" : "@{definitions:distribution:identifier}",
+		"environment:FUSEKI_HOME" : "@{package:root}/lib/fuseki",
+		"environment:FUSEKI_CONF" : "@{package:root}/etc/fuseki",
+		"environment:FUSEKI_VAR" : "@{package:root}/var/fuseki",
+		"environment:JAVA_HOME" : "/opt/mosaic-rt-jre-7-32bit",
+		"environment:RUBY_HOME" : "/opt/mosaic-rt-ruby-v1.9-32bit",
+		"versions:modaclouds:fuseki" : "1.0.1"
+	}
+}
