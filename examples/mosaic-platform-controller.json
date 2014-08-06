@@ -28,6 +28,18 @@
 	
 	"overlays" : [
 		{
+			"generator" : "folders",
+			"target" : "@{package:root}",
+			"folders" : [
+				"/",
+				"/bin",
+				"/lib",
+				"/lib/mosaic-node",
+				"/lib/mosaic-node-wui",
+				"/lib/mosaic-node-boot"
+			]
+		},
+		{
 			"generator" : "unarchiver",
 			"target" : "@{package:root}/lib/mosaic-node",
 			"resource" : "mosaic-node.cpio.gz",
@@ -73,7 +85,6 @@
 	
 	"definitions" : {
 		"package:name" : "mosaic-platform-controller",
-		"package:name-qualified" : "@{definitions:package:name}-@{definitions:distribution:identifier}",
 		"package:version" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
 		"package:release" : "@{execution:timestamp}",
 		"distribution:version" : "0.7.0",

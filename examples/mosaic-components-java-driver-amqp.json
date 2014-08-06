@@ -26,6 +26,11 @@
 	
 	"overlays" : [
 		{
+			"generator" : "folders",
+			"target" : "@{package:root}",
+			"folders" : ["/"]
+		},
+		{
 			"generator" : "unarchiver",
 			"target" : "@{package:root}",
 			"resource" : "mosaic-components-java-driver-amqp.cpio.gz",
@@ -42,7 +47,6 @@
 	
 	"definitions" : {
 		"package:name" : "mosaic-components-java-driver-amqp",
-		"package:name-qualified" : "@{definitions:package:name}-@{definitions:distribution:identifier}",
 		"package:version" : "@{definitions:distribution:version}.@{definitions:distribution:release}_@{definitions:distribution:label}",
 		"package:release" : "@{execution:timestamp}",
 		"distribution:version" : "0.7.0",
