@@ -1399,7 +1399,7 @@ class ExpandFileCommand (Command) :
 			with _coerce_file (_source, "r") as _stream :
 				for _line in _stream :
 					_line = self._expand (_line)
-					yield _line + "\n"
+					yield _line
 		_create = self._create.instantiate (_safe_target, _chunks)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_create, _mv])
