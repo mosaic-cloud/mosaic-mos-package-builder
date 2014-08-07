@@ -258,7 +258,8 @@ class Builder (object) :
 		if _generator == "unarchiver" :
 			_resource = ResolvableValue (self._context, ExpandableStringValue (self._context, _json_select (_descriptor, ("resource",), basestring), pattern = _context_value_identifier_re), self.resolve_resource)
 			_format = ExpandableStringValue (self._context, _json_select (_descriptor, ("format",), basestring))
-			_overlay = UnarchiverOverlay (self, _root, _target, lambda : _resource () .path, _format)
+			_options = _json_select (_descriptor, ("options",), dict, required = False)
+			_overlay = UnarchiverOverlay (self, _root, _target, lambda : _resource () .path, _format, _options)
 			
 		elif _generator == "file-creator" :
 			_resource = ResolvableValue (self._context, ExpandableStringValue (self._context, _json_select (_descriptor, ("resource",), basestring), pattern = _context_value_identifier_re), self.resolve_resource)
@@ -273,6 +274,15 @@ class Builder (object) :
 				_link_source = PathValue (self._context, [ExpandableStringValue (self._context, _link_source)], pattern = _normal_path_re)
 				_links.append ((_link_target, _link_source))
 			_overlay = SymlinksOverlay (self, _root, _target, _links)
+			
+		elif _generator == "renames" :
+			_renames = []
+			for _rename_target in _json_select (_descriptor, ("renames",), dict) :
+				_rename_source = _json_select (_descriptor, ("renames", _rename_target,), basestring)
+				_rename_target = PathValue (self._context, [ExpandableStringValue (self._context, _rename_target)], pattern = _target_path_re)
+				_rename_source = PathValue (self._context, [ExpandableStringValue (self._context, _rename_source)], pattern = _target_path_re)
+				_renames.append ((_rename_target, _rename_source))
+			_overlay = RenamesOverlay (self, _root, _target, _renames)
 			
 		elif _generator == "folders" :
 			_folders = []
@@ -515,7 +525,7 @@ class CompositePackageBuilder (Builder) :
 						"__spec_clean_cmd" : _true_path,
 				},
 				
-				rpm_rc = "/dev/null",
+				# rpm_rc = "/dev/null",
 				rpm_db = PathValue (None, [self.rpm_outputs, "DB"]),
 		))
 		
@@ -661,10 +671,11 @@ class Overlay (object) :
 
 class UnarchiverOverlay (Overlay) :
 	
-	def __init__ (self, _builder, _root, _target, _resource, _format) :
+	def __init__ (self, _builder, _root, _target, _resource, _format, _options) :
 		Overlay.__init__ (self, _builder, _root, _target)
 		self._resource = _resource
 		self._format = _format
+		self._options = _options
 	
 	def instantiate (self) :
 		
@@ -695,11 +706,11 @@ class UnarchiverOverlay (Overlay) :
 		_target = PathValue (None, [self._root, self._target])
 		
 		if _archive_format == "cpio" :
-			_command = CpioExtractCommand (**self._command_arguments) .instantiate (_target, _stream)
+			_command = CpioExtractCommand (**self._command_arguments) .instantiate (_target, _stream, options = self._options)
 			_commands.append (_command)
 			
 		elif _archive_format == "tar" :
-			_command = TarExtractCommand (**self._command_arguments) .instantiate (_target, _stream)
+			_command = TarExtractCommand (**self._command_arguments) .instantiate (_target, _stream, options = self._options)
 			_commands.append (_command)
 			
 		else :
@@ -767,6 +778,32 @@ class SymlinksOverlay (Overlay) :
 			_scroll.appendf ("`%s` -> `%s`;", _target, _source, indentation = 2)
 		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
 
+
+class RenamesOverlay (Overlay) :
+	
+	def __init__ (self, _builder, _root, _target, _renames) :
+		Overlay.__init__ (self, _builder, _root, _target)
+		self._renames = _renames
+	
+	def instantiate (self) :
+		_commands = []
+		for _target, _source in self._renames :
+			_target = PathValue (None, [self._root, self._target, _target])
+			_source = PathValue (None, [self._root, self._target, _source])
+			_commands.append (MvCommand (**self._command_arguments) .instantiate (_target, _source))
+		return SequentialCommandInstance (_commands)
+	
+	def describe (self, _scroll) :
+		_scroll.append ("renames overlay:")
+		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
+		_scroll.append ("renames:", indentation = 1)
+		_renames = {}
+		for _target, _source in self._renames :
+			_renames[_target] = _source
+		for _target in sorted (_renames.keys ()) :
+			_source = _renames[_target]
+			_scroll.appendf ("`%s` -> `%s`;", _target, _source, indentation = 2)
+		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
 
 class FoldersOverlay (Overlay) :
 	
@@ -1226,10 +1263,10 @@ class SafeZipExtractCommand (Command) :
 		self._unzip = ZipExtractCommand (**_arguments)
 		self._mv = MvCommand (**_arguments)
 	
-	def instantiate (self, _target, _archive) :
+	def instantiate (self, _target, _archive, **_arguments) :
 		_safe_target = _resolve_temporary_path (_target)
 		_mkdir = self._mkdir.instantiate (_safe_target)
-		_unzip = self._unzip.instantiate (_safe_target, _archive)
+		_unzip = self._unzip.instantiate (_safe_target, _archive, **_arguments)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_mkdir, _unzip, _mv])
 
@@ -1248,7 +1285,9 @@ class CpioExtractCommand (BasicCommand) :
 	def __init__ (self, **_arguments) :
 		BasicCommand.__init__ (self, "cpio", **_arguments)
 	
-	def instantiate (self, _target, _input) :
+	def instantiate (self, _target, _input, options = None) :
+		if options is not None :
+			raise _error ("wtf!")
 		return self._instantiate_1 (
 				["-i", "-H", "newc", "--make-directories", "--no-absolute-filenames", "--no-preserve-owner", "--quiet"],
 				stdin = _input, root = _target)
@@ -1262,10 +1301,10 @@ class SafeCpioExtractCommand (Command) :
 		self._cpio = CpioExtractCommand (**_arguments)
 		self._mv = MvCommand (**_arguments)
 	
-	def instantiate (self, _target, _archive) :
+	def instantiate (self, _target, _archive, **_arguments) :
 		_safe_target = _resolve_temporary_path (_target)
 		_mkdir = self._mkdir.instantiate (_safe_target)
-		_cpio = self._cpio.instantiate (_safe_target, _archive)
+		_cpio = self._cpio.instantiate (_safe_target, _archive, **_arguments)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_mkdir, _cpio, _mv])
 
@@ -1275,15 +1314,29 @@ class TarExtractCommand (BasicCommand) :
 	def __init__ (self, **_arguments) :
 		BasicCommand.__init__ (self, "tar", **_arguments)
 	
-	def instantiate (self, _target, _input) :
-		return self._instantiate_1 (
-				[
-						"--extract",
-						"--directory", _target,
-						"--delay-directory-restore", "--no-overwrite-dir",
-						# "--keep-directory-symlink",
-						"--preserve-permissions", "--no-same-owner"],
-				stdin = _input)
+	def instantiate (self, _target, _input, options = None) :
+		
+		_arguments = []
+		_arguments.extend ([
+				"--extract",
+				"--directory", _target,
+		])
+		_arguments.extend ([
+						"--delay-directory-restore",
+						"--no-overwrite-dir",
+						"--preserve-permissions",
+						"--no-same-owner",
+		])
+		
+		if options is not None :
+			for _option, _value in options.items () :
+				if _option == "strip-components" :
+					_arguments.extend (["--transform", "s%^\./%%"])
+					_arguments.extend (["--strip-components", str (_coerce (_value, int))])
+				else :
+					raise _error ("wtf!")
+		
+		return self._instantiate_1 (_arguments, stdin = _input)
 
 
 class SafeTarExtractCommand (Command) :
@@ -1294,10 +1347,10 @@ class SafeTarExtractCommand (Command) :
 		self._tar = TarExtractCommand (**_arguments)
 		self._mv = MvCommand (**_arguments)
 	
-	def instantiate (self, _target, _archive) :
+	def instantiate (self, _target, _archive, **_arguments) :
 		_safe_target = _resolve_temporary_path (_target)
 		_mkdir = self._mkdir.instantiate (_safe_target)
-		_tar = self._tar.instantiate (_safe_target, _archive)
+		_tar = self._tar.instantiate (_safe_target, _archive, **_arguments)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_mkdir, _tar, _mv])
 
@@ -1318,9 +1371,9 @@ class SafeCurlCommand (Command) :
 		self._curl = CurlCommand (**_arguments)
 		self._mv = MvCommand (**_arguments)
 	
-	def instantiate (self, _target, _uri) :
+	def instantiate (self, _target, _uri, **_arguments) :
 		_safe_target = PathValue (None, [_target], temporary = True)
-		_curl = self._curl.instantiate (_safe_target, _uri)
+		_curl = self._curl.instantiate (_safe_target, _uri, **_arguments)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_curl, _mv])
 
@@ -1556,9 +1609,9 @@ class SafeFileCreateCommand (Command) :
 		self._create = FileCreateCommand (**_arguments)
 		self._mv = MvCommand (**_arguments)
 	
-	def instantiate (self, _target, _chunks) :
+	def instantiate (self, _target, _chunks, **_arguments) :
 		_safe_target = PathValue (None, [_target], temporary = True)
-		_create = self._create.instantiate (_safe_target, _chunks)
+		_create = self._create.instantiate (_safe_target, _chunks, **_arguments)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_create, _mv])
 
