@@ -258,7 +258,7 @@ class Builder (object) :
 		if _generator == "unarchiver" :
 			_resource = ResolvableValue (self._context, ExpandableStringValue (self._context, _json_select (_descriptor, ("resource",), basestring), pattern = _context_value_identifier_re), self.resolve_resource)
 			_format = ExpandableStringValue (self._context, _json_select (_descriptor, ("format",), basestring))
-			_options = _json_select (_descriptor, ("options",), dict, required = False)
+			_options = _json_select (_descriptor, ("options",), dict, required = False, default = {})
 			_overlay = UnarchiverOverlay (self, _root, _target, lambda : _resource () .path, _format, _options)
 			
 		elif _generator == "file-creator" :
@@ -1293,7 +1293,7 @@ class CpioExtractCommand (BasicCommand) :
 		BasicCommand.__init__ (self, "cpio", **_arguments)
 	
 	def instantiate (self, _target, _input, options = None) :
-		if options is not None :
+		if options is not None and len (options) > 0 :
 			raise _error ("wtf!")
 		return self._instantiate_1 (
 				["-i", "-H", "newc", "--make-directories", "--no-absolute-filenames", "--no-preserve-owner", "--quiet"],
@@ -1850,7 +1850,7 @@ elif __name__ == "__main__" :
 			"package-release" : None,
 			"package-distribution" : None,
 			
-			"execute" : False,
+			"execute" : True,
 	}
 	
 	if len (sys.argv) == 2 :
@@ -1885,8 +1885,8 @@ elif __name__ == "__main__" :
 	_configuration["package"] = _package
 	_configuration["workbench"] = _workbench
 	
-	if os.environ.get ("__execute__") == "__true__" :
-		_configuration["execute"] = True
+	#if os.environ.get ("__execute__") != "__true__" :
+	#	_configuration["execute"] = False
 	
 	_main (_configuration)
 	
