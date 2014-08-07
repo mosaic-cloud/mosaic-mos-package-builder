@@ -263,8 +263,9 @@ class Builder (object) :
 			
 		elif _generator == "file-creator" :
 			_resource = ResolvableValue (self._context, ExpandableStringValue (self._context, _json_select (_descriptor, ("resource",), basestring), pattern = _context_value_identifier_re), self.resolve_resource)
-			_expand = _json_select (_descriptor, ("expand",), bool)
-			_overlay = FileCreatorOverlay (self, _root, _target, _resource () .path, _expand, self._context.resolve_value)
+			_executable = _json_select (_descriptor, ("executable",), bool, required = False, default = False)
+			_expand = _json_select (_descriptor, ("expand",), bool, required = False, default = False)
+			_overlay = FileCreatorOverlay (self, _root, _target, _resource () .path, _executable, _expand, self._context.resolve_value)
 			
 		elif _generator == "symlinks" :
 			_links = []
@@ -730,9 +731,10 @@ class UnarchiverOverlay (Overlay) :
 
 class FileCreatorOverlay (Overlay) :
 	
-	def __init__ (self, _builder, _root, _target, _resource, _expand, _resolver) :
+	def __init__ (self, _builder, _root, _target, _resource, _executable, _expand, _resolver) :
 		Overlay.__init__ (self, _builder, _root, _target)
 		self._resource = _resource
+		self._executable = _executable
 		self._expand = _expand
 		self._resolver = _resolver
 	
@@ -742,6 +744,11 @@ class FileCreatorOverlay (Overlay) :
 			_command = CpCommand (**self._command_arguments) .instantiate (_target, self._resource)
 		else :
 			_command = ExpandFileCommand (self._resolver, **self._command_arguments) .instantiate (_target, self._resource)
+		if self._executable :
+			_commands = []
+			_commands.append (_command)
+			_commands.append (ChmodCommand (**self._command_arguments) .instantiate (_target, "+x"))
+			_command = SequentialCommandInstance (_commands)
 		return _command
 	
 	def describe (self, _scroll) :
