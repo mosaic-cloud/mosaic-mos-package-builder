@@ -10,10 +10,10 @@ import uuid
 
 if os.environ.get ("JENKINS_URL") is not None and os.environ.get ("BUILD_TAG") is not None :
 	_workbench = os.environ["WORKSPACE"]
-	_temporary = path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/temporary", os.environ["BUILD_TAG"])
+	_temporary = path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder--%s" % (os.environ["BUILD_TAG"],))
 else :
-	_workbench = path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/workbench")
-	_temporary = path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/temporary", uuid.uuid4 () .hex)
+	_workbench = path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder--workbench")
+	_temporary = path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder--%s" % (uuid.uuid4 () .hex,))
 
 if not path.exists (_temporary) :
 	os.makedirs (_temporary)

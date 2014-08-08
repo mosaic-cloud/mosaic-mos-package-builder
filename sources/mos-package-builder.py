@@ -27,7 +27,7 @@ def _main (_configuration) :
 	
 	if _temporary is None :
 		_logger.debug ("unspecified temporary; using a random one!")
-		_temporary = path.realpath (path.join (path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/temporary", uuid.uuid4 () .hex)))
+		_temporary = path.realpath (path.join (path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder--%s" % (uuid.uuid4 () .hex,))))
 		MkdirCommand () .execute (_temporary, True)
 	
 	if _sources is None :
@@ -1526,7 +1526,7 @@ class ExternalCommandInstance (object) :
 		self._stdin = _stdin
 		self._stdout = _stdout
 		self._stderr = _stderr
-		self._root = _root or os.environ.get ("TMPDIR") or "/tmp"
+		self._root = _root or os.environ.get ("TMPDIR", "/tmp")
 		self._process = None
 	
 	def execute (self, wait = True) :
