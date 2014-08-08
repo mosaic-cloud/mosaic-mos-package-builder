@@ -29,7 +29,6 @@ _configuration = {
 		"package-name" : os.environ.get ("PackageName"),
 		"package-version" : os.environ.get ("PackageVersion"),
 		"package-release" : os.environ.get ("PackageRelease"),
-		"package-distribution" : os.environ.get ("PackageDistribution"),
 		
 		"workbench" : _workbench,
 		"temporary" : _temporary,

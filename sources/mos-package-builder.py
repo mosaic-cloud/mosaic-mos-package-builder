@@ -22,7 +22,6 @@ def _main (_configuration) :
 	_package_name = _configuration["package-name"]
 	_package_version = _configuration["package-version"]
 	_package_release = _configuration["package-release"]
-	_package_distribution = _configuration["package-distribution"]
 	
 	_execute = _configuration["execute"]
 	
@@ -95,7 +94,6 @@ def _main (_configuration) :
 	_logger.info ("  -> package name: `%s`;", _package_name)
 	_logger.info ("  -> package version: `%s`;", _package_version)
 	_logger.info ("  -> package release: `%s`;", _package_release)
-	_logger.info ("  -> package distribution: `%s`;", _package_distribution)
 	
 	os.chdir (_temporary)
 	os.environ["TMPDIR"] = _temporary
@@ -109,11 +107,9 @@ def _main (_configuration) :
 	if _package_name is not None :
 		_definitions["package:name"] = _package_name
 	if _package_version is not None :
-		_definitions["distribution:version"] = _package_version
+		_definitions["package:version"] = _package_version
 	if _package_release is not None :
-		_definitions["distribution:release"] = _package_release
-	if _package_distribution is not None :
-		_definitions["distribution:label"] = _package_distribution
+		_definitions["package:release"] = _package_release
 	
 	_logger.info ("initializing builder...")
 	_builder = _create_builder (
@@ -1848,7 +1844,6 @@ elif __name__ == "__main__" :
 			"package-name" : None,
 			"package-version" : None,
 			"package-release" : None,
-			"package-distribution" : None,
 			
 			"execute" : True,
 	}
@@ -1884,6 +1879,13 @@ elif __name__ == "__main__" :
 	_configuration["sources"] = _sources
 	_configuration["package"] = _package
 	_configuration["workbench"] = _workbench
+	
+	_package_name = os.environ.get ("mpb_package_name", None)
+	if _package_name is not None and _package_name != "" :
+		_configuration["package-name"] = _package_name
+	_package_version = os.environ.get ("mpb_package_version", None)
+	if _package_version is not None and _package_version != "" :
+		_configuration["package-version"] = _package_version
 	
 	#if os.environ.get ("__execute__") != "__true__" :
 	#	_configuration["execute"] = False
