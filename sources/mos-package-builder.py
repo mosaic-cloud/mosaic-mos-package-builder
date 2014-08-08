@@ -230,7 +230,12 @@ class Builder (object) :
 		if _generator == "fetcher" :
 			_uri = ExpandableStringValue (self._context, _json_select (_descriptor, ("uri",), basestring), pattern = _resource_uri_re)
 			_target = PathValue (self._context, [_identifier], pattern = _target_path_re)
-			_resource = FetcherResource (self, _identifier, _uri, self._resource_outputs, _target)
+			_cache = _json_select (_descriptor, ("cache",), basestring, required = False, default = "")
+			if _cache != "" :
+				_cache = ExpandableStringValue (self._context, _cache, pattern = _target_path_re)
+			else :
+				_cache = None
+			_resource = FetcherResource (self, _identifier, _uri, self._resource_outputs, _target, _cache)
 			
 		elif _generator == "sources" :
 			_source = PathValue (self._context, [ExpandableStringValue (self._context, _json_select (_descriptor, ("path",), basestring))], pattern = _target_path_re)
@@ -869,15 +874,37 @@ class ClonedResource (Resource) :
 
 class FetcherResource (Resource) :
 	
-	def __init__ (self, _builder, _identifier, _uri, _outputs, _target) :
+	def __init__ (self, _builder, _identifier, _uri, _outputs, _target, _cache) :
 		Resource.__init__ (self, _builder, _identifier)
 		self._uri = _uri
 		self._outputs = _outputs
 		self._target = _target
 		self.path = PathValue (None, [self._outputs, self._target])
+		self._cache = _cache
+		if self._cache is None :
+			self._cache = "mosaic-mos-package-builder--%s" % (uuid.uuid5 (uuid.UUID ("69c9d129-1635-44be-bfc5-3115799e5872"), str (_coerce (self._target, basestring))) .hex,)
 	
 	def instantiate (self) :
-		return SafeCurlCommand (**self._command_arguments) .instantiate (self.path, self._uri)
+		_cache = self._cache
+		if _cache is not None :
+			_cache_root = os.environ.get ("mpb_resources_cache", None)
+			if _cache_root is not None and _cache_root != "" :
+				_cache = PathValue (None, [_cache_root, _cache])
+			else :
+				_cache = None
+		_cached = False
+		if _cache is not None :
+			if path.exists (_coerce (_cache, basestring)) :
+				_cached = True
+		if _cache is None :
+			return SafeCurlCommand (**self._command_arguments) .instantiate (self.path, self._uri)
+		else :
+			if _cached :
+				return LnCommand (**self._command_arguments) .instantiate (self.path, _cache, True)
+			else :
+				return SequentialCommandInstance ([
+						SafeCurlCommand (**self._command_arguments) .instantiate (_cache, self._uri),
+						LnCommand (**self._command_arguments) .instantiate (self.path, _cache, True)])
 	
 	def describe (self, _scroll) :
 		_scroll.append ("fetcher resource:")
