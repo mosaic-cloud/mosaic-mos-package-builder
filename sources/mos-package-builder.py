@@ -26,7 +26,7 @@ def _main (_configuration) :
 	_execute = _configuration["execute"]
 	
 	if _temporary is None :
-		_logger.info ("unspecified temporary; using a random one!")
+		_logger.debug ("unspecified temporary; using a random one!")
 		_temporary = path.realpath (path.join (path.join (os.environ.get ("TMPDIR", "/tmp"), "mosaic-mos-package-builder/temporary", uuid.uuid4 () .hex)))
 		MkdirCommand () .execute (_temporary, True)
 	
@@ -38,7 +38,7 @@ def _main (_configuration) :
 					break
 	
 	if _sources is None :
-		_logger.info ("unspecified sources; ignoring!")
+		_logger.debug ("unspecified sources; ignoring!")
 		_sources_root = None
 		_sources_archive = None
 	elif path.isdir (_sources) :
@@ -66,7 +66,7 @@ def _main (_configuration) :
 				_descriptor = path.join (_workbench, "package.json")
 	
 	if _descriptor is None :
-		_logger.info ("unspecified descriptor; using `package.json`!")
+		_logger.debug ("unspecified descriptor; using `package.json`!")
 		if _sources_root is None :
 			raise _error ("wtf!")
 		_descriptor = path.join (_sources_root, "package.json")
@@ -77,7 +77,7 @@ def _main (_configuration) :
 			_package_archive = path.join (_workbench, "package.rpm")
 	
 	if _package_archive is None :
-		_logger.info ("unspecified package archive; using `package.rpm`!")
+		_logger.debug ("unspecified package archive; using `package.rpm`!")
 		_package_archive = path.realpath (path.join (_temporary, "package.rpm"))
 	else :
 		_package_archive = path.realpath (_package_archive)
@@ -111,7 +111,7 @@ def _main (_configuration) :
 	if _package_release is not None :
 		_definitions["package:release"] = _package_release
 	
-	_logger.info ("initializing builder...")
+	_logger.debug ("initializing builder...")
 	_builder = _create_builder (
 			descriptor = _json_load (_descriptor),
 			sources = _sources_root,
@@ -121,7 +121,7 @@ def _main (_configuration) :
 			definitions = _definitions,
 	)
 	
-	_logger.info ("generating commands...")
+	_logger.debug ("generating commands...")
 	_prepare = _builder.instantiate ("prepare")
 	_assemble = _builder.instantiate ("assemble")
 	_package = _builder.instantiate ("package")
@@ -151,7 +151,7 @@ def _main (_configuration) :
 		
 		_scroll.stream (lambda _line : _logger.debug ("%s", _line))
 	
-	if False :
+	if True :
 		_scroll = Scroll ()
 		
 		_scroll.append ("rpm specification:")
@@ -161,16 +161,16 @@ def _main (_configuration) :
 	
 	if _execute :
 		
-		_logger.info ("executing prepare commands...")
+		_logger.debug ("executing prepare commands...")
 		_prepare.execute ()
 		
-		_logger.info ("executing assemble commands...")
+		_logger.debug ("executing assemble commands...")
 		_assemble.execute ()
 		
-		_logger.info ("executing package commands...")
+		_logger.debug ("executing package commands...")
 		_package.execute ()
 		
-		_logger.info ("executing cleanup commands...")
+		_logger.debug ("executing cleanup commands...")
 		_cleanup.execute ()
 		
 		_logger.info ("succeeded; package available at `%s`!", _package_archive)
@@ -1822,7 +1822,7 @@ def _error (_code, **_attributes) :
 import logging
 logging.basicConfig ()
 _logger = logging.getLogger ("mosaic-mpb")
-_logger.setLevel (logging.DEBUG)
+_logger.setLevel (logging.INFO)
 
 
 if __name__ == "__wrapped__" :
