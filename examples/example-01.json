@@ -1,0 +1,76 @@
+{
+	// This part is constant.  It identifies the JSON structure.
+	"_schema" : "tag:ieat.ro,2014:mosaic:v2:mos-package-builder:descriptors:composite-package",
+	"_schema/version" : 1,
+	
+	// These are the the main package information tags.
+	//   See: https://docs.fedoraproject.org/en-US/Fedora_Draft_Documentation/0.1/html/RPM_Guide/ch-specfile-syntax.html
+	// The values are accessible as @{package:<name>}, etc.
+	"package" : {
+		"name" : "@{definitions:package:name}",
+		"version" : "@{definitions:package:version}",
+		"release" : "@{definitions:package:release}",
+		"architecture" : "i686",
+		"root" : "/opt/@{package:identifier}"
+	},
+	
+	// These are the package dependency tags.  (See the link as above.)
+	"dependencies" : {
+		"provides" : ["@{definitions:package:name}"],
+		"requires" : [
+			"mosaic-rt-erlang-r15b-32bit",
+			"glibc-32bit"
+		]
+	},
+	
+	// These are the other (less important) package information tags.
+	"miscellaneous" : {
+		"license" : "apache-2.0",
+		"url" : "http://mosaic.ieat.ro/",
+		"summary" : "mOSAIC components: RabbitMQ"
+	},
+	
+	// This section describes how the contents of the package is to be created.
+	"overlays" : [
+		{
+			// This overlay states that some folders should be created.
+			"generator" : "folders",
+			// This `target` states that the folders to be created should be prefixed with the specified value.
+			"target" : "@{package:root}",
+			// This in effect states that `@{package:root}` should be created.
+			"folders" : ["/"]
+		},
+		{
+			// This overlay states that the contents of the resource file should be unarchived.
+			"generator" : "unarchiver",
+			// This states that the contents should be placed under the specified path.
+			"target" : "@{package:root}",
+			// This states the name of the rource to be used.  (See the next section.)
+			"resource" : "mosaic-components-rabbitmq.cpio.gz",
+			// This states that the archive is to be extracted with `cpio` after `gunzip` has been run.
+			"format" : "cpio+gzip"
+		}
+	],
+	
+	// This section describes resource files that are needed to create the package.
+	"resources" : {
+		"mosaic-components-rabbitmq.cpio.gz" : {
+			// This states how the resource file is to be obtained, i.e. fetching it from an URL.
+			"generator" : "fetcher",
+			// The URL of the resource (see below the URL base)!
+			"uri" : "@{definitions:resources:url:base}/mosaic-components-rabbitmq--@{definitions:resources:url:suffix}.cpio.gz",
+			// This value is inferred automatically.  It should not be usually specified!
+			"cache" : "mosaic-components-rabbitmq--@{definitions:resources:url:suffix}.cpio.gz"
+		}
+	},
+	
+	// These are "variables" that allow some customization.
+	// The values are accessible as @{definitions:<name>}, etc.
+	"definitions" : {
+		"package:name" : "mosaic-components-rabbitmq",
+		"package:version" : "0.7.0_dev",
+		"package:release" : "@{execution:timestamp}",
+		"resources:url:base" : "http://data.volution.ro/ciprian/public/mosaic/packages",
+		"resources:url:suffix" : "@{definitions:package:version}"
+	}
+}

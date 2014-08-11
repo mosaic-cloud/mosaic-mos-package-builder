@@ -1,0 +1,110 @@
+{
+	"_schema" : "tag:ieat.ro,2014:mosaic:v2:mos-package-builder:descriptors:composite-package",
+	"_schema/version" : 1,
+	
+	"package" : {
+		"name" : "@{definitions:package:name}",
+		"version" : "@{definitions:package:version}",
+		"release" : "@{definitions:package:release}",
+		"architecture" : "i686",
+		"root" : "/opt/@{package:identifier}"
+	},
+	
+	"dependencies" : {
+		"provides" : ["@{definitions:package:name}"],
+		"requires" : [
+			"modaclouds-rt-matlab-mcr-r2013a",
+			"mosaic-rt-jre-7"
+		]
+	},
+	
+	"miscellaneous" : {
+		"license" : "apache-2.0",
+		"url" : "http://modaclouds.eu/",
+		"summary" : "MODAClouds services: monitoring SDA Matlab"
+	},
+	
+	"overlays" : [
+		{
+			"generator" : "folders",
+			"target" : "@{package:root}",
+			"folders" : [
+				"/",
+				"/etc",
+				"/bin",
+				"/lib",
+				"/etc/sda-matlab",
+				"/lib/sda-matlab",
+				"/lib/scripts"
+			]
+		},
+		{
+			"generator" : "unarchiver",
+			"target" : "@{package:root}/lib/sda-matlab",
+			"resource" : "sda-matlab-distribution.tar.gz",
+			"format" : "tar+gzip",
+			"options" : {
+				// This states that the paths within the archive should be rewritten by removing the first component.
+				//   I.e. `a/b/c` becomes `b/c`.
+				"strip-components" : 1
+			}
+		},
+		{
+			// This overlay states that a file should be created from a template, possibly with expansion of definitions.
+			"generator" : "file-creator",
+			// This states the path of the destination file.
+			"target" : "@{package:root}/lib/scripts/run.bash",
+			// This states the resource file used as a template.
+			"resource" : "service-run.bash",
+			// This states that the destination file should be marked as executable.
+			"executable" : true,
+			// This states that definition expansion should be done.
+			"expand" : true
+		},
+		{
+			// This overlay states that some symlinks should be created.
+			"generator" : "symlinks",
+			// Like in the `folders` generator case, the symlinks are created under this folder.
+			"target" : "@{package:root}/lib/sda-matlab",
+			"links" : {
+				// The key is the path (relative to `target`) of the symlink, and the value is the exact contents of the symlink.
+				"dda.properties" : "../../etc/sda-matlab/dda.properties",
+				"kb.properties" : "../../etc/sda-matlab/kb.properties",
+				"port.txt" : "../../etc/sda-matlab/port.txt"
+			}
+		},
+		{
+			"generator" : "symlinks",
+			"target" : "@{package:root}/bin",
+			"links" : {
+				"@{package:name}--run-service" : "../lib/scripts/run.bash"
+			}
+		}
+	],
+	
+	"resources" : {
+		"service-run.bash" : {
+			// This states that the resource file is to be taken from the sources folder.
+			"generator" : "sources",
+			"path" : "service-run.bash"
+		},
+		"sda-matlab-distribution.tar.gz" : {
+			"generator" : "fetcher",
+			"uri" : "@{definitions:resources:modaclouds:url:dependencies}/modaclouds-monitoring-sda-matlab-@{definitions:versions:modaclouds:sda-matlab}-distribution.tar.gz"
+		}
+	},
+	
+	"definitions" : {
+		"package:name" : "modaclouds-services-monitoring-sda-matlab",
+		"package:version" : "0.7.0_dev",
+		"package:release" : "@{execution:timestamp}",
+		"versions:modaclouds:sda-matlab" : "1.0.2",
+		"resources:modaclouds:url:base" : "http://data.volution.ro/ciprian/public/modaclouds",
+		"resources:modaclouds:url:dependencies" : "@{definitions:resources:modaclouds:url:base}/dependencies",
+		// These variables are used in the scripts.
+		"environment:SDA_MATLAB_HOME" : "@{package:root}/lib/sda-matlab",
+		"environment:SDA_MATLAB_CONF" : "@{package:root}/etc/sda-matlab",
+		"environment:MCR_HOME" : "/opt/modaclouds-rt-matlab-mcr-r2013a/v81",
+		"environment:JAVA_HOME" : "/opt/mosaic-rt-jre-7"
+	}
+}
