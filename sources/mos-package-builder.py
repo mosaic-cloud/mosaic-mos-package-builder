@@ -1040,9 +1040,9 @@ def _expand_string_template (_template, _resolver) :
 	_value = _value.replace ("@@", "@")
 	return _value
 
-_expandable_string_template_variable_pattern = "(?:@\{%s\})" % (_context_value_identifier_pattern,)
+_expandable_string_template_variable_pattern = "(?:(?<!@)@\{%s\})" % (_context_value_identifier_pattern,)
 _expandable_string_template_variable_re = _expandable_string_template_variable_pattern
-_expandable_string_template_pattern = "(?:(?:%s|[^@]*|@@)*)" % (_expandable_string_template_variable_pattern,)
+_expandable_string_template_pattern = "(?:(?:[^@]*|@@|%s)*)" % (_expandable_string_template_variable_pattern,)
 _expandable_string_template_re = re.compile ("^%s$" % (_expandable_string_template_pattern,))
 
 
