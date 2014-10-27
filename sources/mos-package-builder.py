@@ -1881,7 +1881,10 @@ def _error (_code, **_attributes) :
 import logging
 logging.basicConfig ()
 _logger = logging.getLogger ("mosaic-mpb")
-_logger.setLevel (logging.INFO)
+if os.environ.get ("mpb_debugging_enabled", None) == "true" :
+	_logger.setLevel (logging.DEBUG)
+else :
+	_logger.setLevel (logging.INFO)
 
 
 if __name__ == "__wrapped__" :
