@@ -286,6 +286,13 @@ class Builder (object) :
 				_renames.append ((_rename_target, _rename_source))
 			_overlay = RenamesOverlay (self, _root, _target, _renames)
 			
+		elif _generator == "unlinks" :
+			_unlinks = []
+			for _unlink_target in _json_select (_descriptor, ("unlinks",), list) :
+				_unlink_target = PathValue (self._context, [ExpandableStringValue (self._context, _unlink_target)], pattern = _target_path_re)
+				_unlinks.append (_unlink_target)
+			_overlay = UnlinksOverlay (self, _root, _target, _unlinks)
+			
 		elif _generator == "folders" :
 			_folders = []
 			for _folder_target in _json_select (_descriptor, ("folders",), list) :
@@ -812,6 +819,29 @@ class RenamesOverlay (Overlay) :
 			_source = _renames[_target]
 			_scroll.appendf ("`%s` -> `%s`;", _target, _source, indentation = 2)
 		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
+
+
+class UnlinksOverlay (Overlay) :
+	
+	def __init__ (self, _builder, _root, _target, _unlinks) :
+		Overlay.__init__ (self, _builder, _root, _target)
+		self._unlinks = _unlinks
+	
+	def instantiate (self) :
+		_commands = []
+		for _target in self._unlinks :
+			_target = PathValue (None, [self._root, self._target, _target])
+			_commands.append (RmCommand (**self._command_arguments) .instantiate (_target, True))
+		return SequentialCommandInstance (_commands)
+	
+	def describe (self, _scroll) :
+		_scroll.append ("unlinks overlay:")
+		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
+		_scroll.append ("unlinks:", indentation = 1)
+		for _target in sorted (self._unlinks) :
+			_scroll.appendf ("`%s`;", _target, indentation = 2)
+		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
+
 
 class FoldersOverlay (Overlay) :
 	
