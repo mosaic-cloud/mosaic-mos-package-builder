@@ -369,6 +369,8 @@ class CompositePackageBuilder (Builder) :
 		self._package_archive = PathValue (self, [package_archive])
 		self._package_outputs = PathValue (self, [package_outputs])
 		
+		self._rpm_spec_files = PathValue (self, [self._temporary, "package.files"], temporary = True)
+		
 		self._initialize (descriptor)
 	
 	def instantiate (self, _phase) :
@@ -480,9 +482,9 @@ class CompositePackageBuilder (Builder) :
 		_scroll.append ("true", indentation = 1)
 		_scroll.append ("")
 		
-		_scroll.append ("%files")
-		_scroll.append ("%defattr(-,root,root,-)", indentation = 1)
-		_scroll.appendf ("%s", self.package_root, indentation = 1)
+		_scroll.appendf ("%%files -f %s", self._rpm_spec_files)
+		_scroll.append ("%defattr(0444,mos-packages,mos-packages,0555)", indentation = 1)
+		#_scroll.appendf ("%s", self.package_root, indentation = 1)
 		_scroll.append ("")
 		
 		# pre
@@ -499,6 +501,17 @@ class CompositePackageBuilder (Builder) :
 		_true_path = _resolve_executable_path ("true")
 		
 		_commands.append (MkdirCommand (**self._command_arguments) .instantiate (self.rpm_outputs))
+		
+		_commands.append (FindCommand (**self._command_arguments) .instantiate (self._rpm_spec_files, self._package_outputs,
+				[PathValue (self, [".", self.package_root])],
+				[
+						"(", "-name", "* *", "-printf", "# failed /%p\\n", ")", "-o",
+						"(", "-type", "d", "-printf", "%%dir %%attr(0555, mos-packages, mos-packages) /%p\\n", ")", "-o",
+						"(", "-type", "f", "-executable", "-printf", "%%attr(0555, mos-packages, mos-packages) /%p\\n", ")", "-o",
+						"(", "-type", "f", "-printf", "%%attr(0444, mos-packages, mos-packages) /%p\\n", ")", "-o",
+						"(", "-type", "l", "-printf", "/%p\\n", ")", "-o",
+						"(", "-printf", "# failed /%p\\n", ")"
+				]))
 		
 		_commands.append (RpmBuildCommand (setarch = self.package_architecture, **self._command_arguments) .instantiate (self.rpm_spec,
 				
@@ -1438,6 +1451,18 @@ class SafeCurlCommand (Command) :
 		_curl = self._curl.instantiate (_safe_target, _uri, **_arguments)
 		_mv = self._mv.instantiate (_target, _safe_target)
 		return SequentialCommandInstance ([_curl, _mv])
+
+
+class FindCommand (BasicCommand) :
+	
+	def __init__ (self, **_arguments) :
+		BasicCommand.__init__ (self, "find", **_arguments)
+	
+	def instantiate (self, _output, _root, _targets, _expressions) :
+		_arguments_1 = []
+		_arguments_1.extend (_targets)
+		_arguments_1.extend (_expressions)
+		return self._instantiate_1 (_arguments_1, stdout = _output, root = _root)
 
 
 class ExpandFileCommand (Command) :
