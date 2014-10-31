@@ -925,7 +925,9 @@ class FetcherResource (Resource) :
 		self.path = PathValue (None, [self._outputs, self._target])
 		self._cache = _cache
 		if self._cache is None :
-			self._cache = "mosaic-mos-package-builder--%s" % (uuid.uuid5 (uuid.UUID ("69c9d129-1635-44be-bfc5-3115799e5872"), str (_coerce (self._target, basestring))) .hex,)
+			self._cache = "mosaic-mos-package-builder--%s--%s" % (
+					uuid.uuid5 (uuid.UUID ("69c9d129-1635-44be-bfc5-3115799e5872"), str (_coerce (self._target, basestring))) .hex,
+					uuid.uuid5 (uuid.UUID ("69c9d129-1635-44be-bfc5-3115799e5872"), str (_coerce (self._uri, basestring))) .hex,)
 	
 	def instantiate (self) :
 		_cache = self._cache
