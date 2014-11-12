@@ -268,6 +268,10 @@ class Builder (object) :
 			_expand = _json_select (_descriptor, ("expand",), bool, required = False, default = False)
 			_overlay = FileCreatorOverlay (self, _root, _target, _resource () .path, _executable, _expand, self._context.resolve_value)
 			
+		elif _generator == "patcher" :
+			_resource = ResolvableValue (self._context, ExpandableStringValue (self._context, _json_select (_descriptor, ("resource",), basestring), pattern = _context_value_identifier_re), self.resolve_resource)
+			_overlay = PatcherOverlay (self, _root, _target, _resource () .path)
+			
 		elif _generator == "symlinks" :
 			_links = []
 			for _link_target in _json_select (_descriptor, ("links",), dict) :
@@ -779,6 +783,23 @@ class FileCreatorOverlay (Overlay) :
 		_scroll.appendf ("expand: `%s`;", self._expand, indentation = 1)
 		_scroll.appendf ("resolver: `%s`;", repr (self._resolver), indentation = 1)
 		_scroll.appendf ("root: `%s`;", self._root, indentation = 1)
+
+
+class PatcherOverlay (Overlay) :
+	
+	def __init__ (self, _builder, _root, _target, _resource) :
+		Overlay.__init__ (self, _builder, _root, _target)
+		self._resource = _resource
+	
+	def instantiate (self) :
+		_target = PathValue (None, [self._root, self._target])
+		_command = PatchCommand (**self._command_arguments) .instantiate (_target, self._resource)
+		return _command
+	
+	def describe (self, _scroll) :
+		_scroll.append ("patcher overlay:")
+		_scroll.appendf ("target: `%s`;", self._target, indentation = 1)
+		_scroll.appendf ("resource: `%s`;", self._resource, indentation = 1)
 
 
 class SymlinksOverlay (Overlay) :
@@ -1525,6 +1546,29 @@ class RpmBuildCommand (BasicCommand) :
 		
 		_arguments.append ("--")
 		_arguments.append (_spec)
+		
+		return self._instantiate_1 (_arguments)
+
+
+class PatchCommand (BasicCommand) :
+	
+	def __init__ (self, **_arguments) :
+		BasicCommand.__init__ (self, "patch", **_arguments)
+	
+	def instantiate (self, _target, _patch) :
+		
+		_arguments = []
+		
+		_arguments.append ("-s")
+		
+		_arguments.append ("-p")
+		_arguments.append ("1")
+		
+		_arguments.append ("-d")
+		_arguments.append (_target)
+		
+		_arguments.append ("-i")
+		_arguments.append (_patch)
 		
 		return self._instantiate_1 (_arguments)
 
