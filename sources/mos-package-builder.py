@@ -127,14 +127,14 @@ def _main (_configuration) :
 	_package = _builder.instantiate ("package")
 	_cleanup = _builder.instantiate ("cleanup")
 	
-	if True :
+	if False :
 		_scroll = Scroll ()
 		
 		_builder.describe (_scroll)
 		
 		_scroll.stream (lambda _line : _logger.debug ("%s", _line))
 	
-	if True :
+	if False :
 		_scroll = Scroll ()
 		
 		_scroll.append ("prepare commands:")
@@ -151,7 +151,7 @@ def _main (_configuration) :
 		
 		_scroll.stream (lambda _line : _logger.debug ("%s", _line))
 	
-	if True :
+	if False :
 		_scroll = Scroll ()
 		
 		_scroll.append ("rpm specification:")
@@ -174,6 +174,9 @@ def _main (_configuration) :
 		_cleanup.execute ()
 		
 		_logger.info ("succeeded; package available at `%s`!", _package_archive)
+	
+	if True :
+		_builder._post_checks ()
 
 
 class Builder (object) :
@@ -207,6 +210,8 @@ class Builder (object) :
 		_descriptors.update (self._definitions_)
 		self._definitions = {}
 		for _identifier in _descriptors :
+			if _identifier.startswith ("##") :
+				continue
 			self._initialize_definition (_identifier, _json_select (_descriptors, (_identifier,), basestring))
 	
 	def _initialize_definition (self, _identifier, _template) :
@@ -217,7 +222,11 @@ class Builder (object) :
 	
 	def _initialize_resources (self, _descriptors) :
 		for _identifier in _descriptors :
+			if _identifier.startswith ("##") :
+				continue
 			_descriptor = _json_select (_descriptors, (_identifier,), dict)
+			if not _json_select (_descriptor, ("enabled",), bool, False, True) :
+				continue
 			self._initialize_resource (_identifier, _descriptor)
 	
 	def _initialize_resource (self, _identifier, _descriptor) :
@@ -249,7 +258,10 @@ class Builder (object) :
 	
 	def _initialize_overlays (self, _descriptors, _root) :
 		for _index in xrange (len (_descriptors)) :
-			self._initialize_overlay (_index, _json_select (_descriptors, (_index,), dict), _root)
+			_descriptor = _json_select (_descriptors, (_index,), dict)
+			if not _json_select (_descriptor, ("enabled",), bool, False, True) :
+				continue
+			self._initialize_overlay (_index, _descriptor, _root)
 	
 	def _initialize_overlay (self, _index, _descriptor, _root) :
 		
@@ -342,7 +354,16 @@ class Builder (object) :
 	def resolve_resource (self, _identifier) :
 		if _identifier not in self._resources :
 			raise _error ("c929637c", identifier = _identifier)
-		return self._resources[_identifier]
+		_resource = self._resources[_identifier]
+		_resource = _resource.resolve ()
+		return _resource
+	
+	def _post_checks (self) :
+		self._context._post_checks ()
+		for _resource in self._resources.values () :
+			_resource._post_checks ()
+		for _overlay in self._overlays :
+			_overlay._post_checks ()
 
 
 def _create_builder (descriptor = None, **_arguments) :
@@ -612,16 +633,22 @@ class CompositePackageBuilder (Builder) :
 	def _initialize_provides (self, _descriptors) :
 		self._rpm_provides = []
 		for _index in xrange (len (_descriptors)) :
+			_template = _json_select (_descriptors, (_index,), basestring)
+			if _template.startswith ("##") :
+				continue
 			_provided = ExpandableStringValue (self._context,
-					_json_select (_descriptors, (_index,), basestring),
+					_template,
 					pattern = _rpm_package_name_re)
 			self._rpm_provides.append (_provided)
 	
 	def _initialize_requires (self, _descriptors) :
 		self._rpm_requires = []
 		for _index in xrange (len (_descriptors)) :
+			_template = _json_select (_descriptors, (_index,), basestring)
+			if _template.startswith ("##") :
+				continue
 			_required = ExpandableStringValue (self._context,
-					_json_select (_descriptors, (_index,), basestring),
+					_template,
 					pattern = _rpm_package_name_re)
 			self._rpm_requires.append (_required)
 	
@@ -687,12 +714,17 @@ class Overlay (object) :
 		self._root = _root
 		self._target = _target
 		self._command_arguments = _builder._command_arguments
+		self._used = False
 	
 	def instantiate (self) :
 		raise _error ("1dc02360")
 	
 	def describe (self, _scroll) :
 		raise _error ("fb80334a")
+	
+	def _post_checks (self) :
+		if not self._used :
+			raise _error ("7cc27ddd", overlay = self)
 
 
 class UnarchiverOverlay (Overlay) :
@@ -704,6 +736,8 @@ class UnarchiverOverlay (Overlay) :
 		self._options = _options
 	
 	def instantiate (self) :
+		
+		self._used = True
 		
 		_format = _coerce (self._format, basestring)
 		if _format == "cpio+gzip" :
@@ -764,6 +798,7 @@ class FileCreatorOverlay (Overlay) :
 		self._resolver = _resolver
 	
 	def instantiate (self) :
+		self._used = True
 		_target = PathValue (None, [self._root, self._target])
 		if not self._expand :
 			_command = CpCommand (**self._command_arguments) .instantiate (_target, self._resource)
@@ -792,6 +827,7 @@ class PatcherOverlay (Overlay) :
 		self._resource = _resource
 	
 	def instantiate (self) :
+		self._used = True
 		_target = PathValue (None, [self._root, self._target])
 		_command = PatchCommand (**self._command_arguments) .instantiate (_target, self._resource)
 		return _command
@@ -809,6 +845,7 @@ class SymlinksOverlay (Overlay) :
 		self._links = _links
 	
 	def instantiate (self) :
+		self._used = True
 		_commands = []
 		for _target, _source in self._links :
 			_target = PathValue (None, [self._root, self._target, _target])
@@ -835,6 +872,7 @@ class RenamesOverlay (Overlay) :
 		self._renames = _renames
 	
 	def instantiate (self) :
+		self._used = True
 		_commands = []
 		for _target, _source in self._renames :
 			_target = PathValue (None, [self._root, self._target, _target])
@@ -862,6 +900,7 @@ class UnlinksOverlay (Overlay) :
 		self._unlinks = _unlinks
 	
 	def instantiate (self) :
+		self._used = True
 		_commands = []
 		for _target in self._unlinks :
 			_target = PathValue (None, [self._root, self._target, _target])
@@ -884,6 +923,7 @@ class FoldersOverlay (Overlay) :
 		self._folders = _folders
 	
 	def instantiate (self) :
+		self._used = True
 		_commands = []
 		for _target in self._folders :
 			_target = PathValue (None, [self._root, self._target, _target])
@@ -904,12 +944,20 @@ class Resource (object) :
 	def __init__ (self, _builder, _identifier) :
 		self._identifier = _identifier
 		self._command_arguments = _builder._command_arguments
+		self._used = False
 	
 	def instantiate (self) :
 		raise _error ("e505577a")
 	
 	def describe (self, _scroll) :
 		raise _error ("4b7ca4e7")
+	
+	def resolve (self) :
+		return self
+	
+	def _post_checks (self) :
+		if not self._used :
+			raise _error ("782ad248", resource = self)
 
 
 class ClonedResource (Resource) :
@@ -923,6 +971,7 @@ class ClonedResource (Resource) :
 		self.path = PathValue (None, [self._outputs, self._target])
 	
 	def instantiate (self) :
+		self._used = True
 		_source = PathValue (None, [self._inputs, self._source])
 		return CpCommand (**self._command_arguments) .instantiate (self.path, _source)
 	
@@ -951,6 +1000,7 @@ class FetcherResource (Resource) :
 					uuid.uuid5 (uuid.UUID ("69c9d129-1635-44be-bfc5-3115799e5872"), str (_coerce (self._uri, basestring))) .hex,)
 	
 	def instantiate (self) :
+		self._used = True
 		_cache = self._cache
 		if _cache is not None :
 			_cache_root = os.environ.get ("mpb_resources_cache", None)
@@ -966,6 +1016,7 @@ class FetcherResource (Resource) :
 			return SafeCurlCommand (**self._command_arguments) .instantiate (self.path, self._uri)
 		else :
 			if _cached :
+				self._uri () # NOTE:  Mark `_uri` as used!
 				return LnCommand (**self._command_arguments) .instantiate (self.path, _cache, True)
 			else :
 				return SequentialCommandInstance ([
@@ -984,8 +1035,9 @@ class FetcherResource (Resource) :
 class Context (object) :
 	
 	def __init__ (self) :
-		self._values = []
 		self._resolvable_values = {}
+		self._resolved_values = set ()
+		self._values = []
 	
 	def register_value (self, _identifier, _value) :
 		if _context_value_identifier_re.match (_identifier) is None :
@@ -993,13 +1045,22 @@ class Context (object) :
 		if _identifier in self._resolvable_values :
 			raise _error ("4a5a0274", identifier = _identifier)
 		self._resolvable_values[_identifier] = _value
+		self._values.append (_value)
 		return _value
 	
 	def resolve_value (self, _identifier) :
 		if not _identifier in self._resolvable_values :
 			raise _error ("a17bc76a", identifier = _identifier)
 		_value = self._resolvable_values[_identifier]
+		self._resolved_values.add (_identifier)
 		return _value
+	
+	def _post_checks (self) :
+		for _value in self._values :
+			_value._post_checks ()
+		#for _identifier in self._resolvable_values :
+		#	if _identifier not in self._resolved_values :
+		#		raise _error ("a464dde1", identifier = _identifier)
 
 _context_value_identifier_part_pattern = "(?:[a-zA-Z0-9](?:[._-]?[a-zA-Z0-9])*)"
 _context_value_identifier_pattern = "(?:%s(?::%s)*)" % (_context_value_identifier_part_pattern, _context_value_identifier_part_pattern)
@@ -1015,6 +1076,7 @@ class ContextValue (object) :
 		self._constraints = constraints if constraints is not None and len (constraints) > 0 else None
 		self._resolved = False
 		self._value = None
+		self._used = False
 		
 		if self._identifier is not None :
 			self._context.register_value (self._identifier, self)
@@ -1031,6 +1093,7 @@ class ContextValue (object) :
 						raise _error ("9dfbd8e7", value = _value)
 			self._value = _value
 			self._resolved = True
+		self._used = True
 		return self._value
 	
 	def _resolve (self) :
@@ -1041,6 +1104,10 @@ class ContextValue (object) :
 	
 	def __repr__ (self) :
 		raise _error ("557267b5")
+	
+	def _post_checks (self) :
+		if not self._used :
+			raise _error ("e91008a5", value = self)
 
 
 class ConstantValue (ContextValue) :
